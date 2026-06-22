@@ -19,7 +19,7 @@ use buffer::TextBuffer;
 use config::FlickConfig;
 use key_hook::HookEvent;
 use std::sync::Mutex;
-use tauri::Manager;
+use tauri::{AppHandle, Manager};
 
 /// Shared application state accessible from commands and the event loop.
 pub struct AppState {
@@ -184,15 +184,17 @@ fn run_hook_loop(app: AppHandle) {
 
                     if is_custom {
                         // Find the custom command prompt
-                        let prompt_template = app
-                            .try_state::<AppState>()
-                            .and_then(|s| {
-                                let cfg = s.config.lock().unwrap();
+                        let prompt_template = {
+                            if let Some(state) = app.try_state::<AppState>() {
+                                let cfg = state.config.lock().unwrap();
                                 cfg.custom_commands
                                     .iter()
                                     .find(|c| c.trigger == trigger_match.command)
                                     .map(|c| c.prompt.clone())
-                            });
+                            } else {
+                                None
+                            }
+                        };
 
                         if let Some(template) = prompt_template {
                             rt.spawn(async move {

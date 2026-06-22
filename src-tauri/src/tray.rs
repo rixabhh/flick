@@ -5,7 +5,6 @@
 use anyhow::Result;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, CheckMenuItemBuilder},
-    tray::TrayIconEvent,
     AppHandle, Manager,
 };
 
