@@ -1,7 +1,7 @@
 [package]
 name = "flick"
 version = "1.0.0"
-description = "Type. Trigger. Done. — A global text transformation utility."
+description = "Type. Trigger. Done. - A global text transformation utility."
 authors = ["Flick"]
 edition = "2021"
 rust-version = "1.77"

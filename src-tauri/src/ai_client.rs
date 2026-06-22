@@ -1,4 +1,4 @@
-// Flick — ai_client.rs
+// Flick - ai_client.rs
 // Per PRD §10.1: Gemini Flash API client.
 // Model: gemini-2.0-flash, temperature 0.3, maxOutputTokens 2048.
 // 10-second timeout per §8.3.
@@ -12,7 +12,7 @@ const GEMINI_ENDPOINT: &str =
     "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Built-in prompt templates — per PRD §9.
+/// Built-in prompt templates - per PRD §9.
 /// Returns the full prompt with {{text}} substituted.
 pub fn get_prompt(command: &str, param: Option<&str>, text: &str) -> Option<String> {
     let template = match command {
@@ -73,7 +73,7 @@ pub async fn transform_text(api_key: &str, prompt: &str) -> Result<String> {
         .await
         .context("Failed to parse Gemini response JSON")?;
 
-    // Extract text from response — per §10.1
+    // Extract text from response - per §10.1
     let text = response_json
         .get("candidates")
         .and_then(|c| c.get(0))

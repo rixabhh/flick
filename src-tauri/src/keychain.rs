@@ -1,4 +1,4 @@
-// Flick — keychain.rs
+// Flick - keychain.rs
 // Per PRD §8.7: API key stored in OS native keychain, never in plaintext config.
 // Uses keyring crate with service "flick" and username "gemini_api_key".
 

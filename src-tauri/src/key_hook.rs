@@ -1,4 +1,4 @@
-// Flick — key_hook.rs
+// Flick - key_hook.rs
 // Per PRD §8.1: Global keyboard listener via rdev in a dedicated background thread.
 // Also listens for mouse clicks to reset buffer (Open Question #1: Yes).
 
@@ -34,7 +34,7 @@ pub fn start_hook() -> mpsc::Receiver<HookEvent> {
                         let _ = tx.send(hook_event);
                     }
                 }
-                // Mouse click resets buffer — Open Question #1 resolution
+                // Mouse click resets buffer - Open Question #1 resolution
                 EventType::ButtonPress(_) => {
                     let _ = tx.send(HookEvent::Clear);
                 }
@@ -53,7 +53,7 @@ pub fn start_hook() -> mpsc::Receiver<HookEvent> {
 /// Map an rdev Key to a HookEvent.
 fn map_key_event(key: Key) -> Option<HookEvent> {
     match key {
-        // Buffer-clearing keys — per §8.1
+        // Buffer-clearing keys - per §8.1
         Key::Return => Some(HookEvent::Clear),
         Key::Tab => Some(HookEvent::Clear),
         Key::Escape => Some(HookEvent::Clear),
@@ -121,7 +121,7 @@ fn map_key_event(key: Key) -> Option<HookEvent> {
         // the name field in rdev events, but since rdev's Key enum doesn't distinguish
         // shifted characters, we rely on the buffer processing to receive '!' via
         // a special path. In practice, rdev will report Shift+1 as Key::Num1.
-        // The exclamation mark character needs special handling — see lib.rs event loop.
+        // The exclamation mark character needs special handling - see lib.rs event loop.
         _ => None,
     }
 }

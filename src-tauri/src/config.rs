@@ -1,4 +1,4 @@
-// Flick — config.rs
+// Flick - config.rs
 // Per PRD §8.8: Non-sensitive settings stored as JSON in the app data directory.
 
 use anyhow::{Context, Result};
@@ -9,14 +9,14 @@ use tauri::{AppHandle, Manager};
 
 const CONFIG_FILENAME: &str = "config.json";
 
-/// A user-defined custom command — per §8.5.
+/// A user-defined custom command - per §8.5.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CustomCommand {
     pub trigger: String,
     pub prompt: String,
 }
 
-/// Application configuration — per §8.8.
+/// Application configuration - per §8.8.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FlickConfig {
     pub enabled: bool,

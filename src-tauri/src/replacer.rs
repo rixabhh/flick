@@ -1,4 +1,4 @@
-// Flick — replacer.rs
+// Flick - replacer.rs
 // Per PRD §8.3: Text replacement flow using clipboard strategy.
 // The 12-step pipeline: save clipboard, select-all, copy, strip trigger,
 // call AI, paste result, restore clipboard.
@@ -12,7 +12,7 @@ use tokio::time::sleep;
 
 use crate::ai_client;
 
-/// Execute the full text replacement pipeline — per §8.3.
+/// Execute the full text replacement pipeline - per §8.3.
 pub async fn execute_replacement(
     app: &AppHandle,
     api_key: &str,
@@ -42,7 +42,7 @@ pub async fn execute_replacement(
         }
     };
 
-    // Abort if clipboard is empty after copy — per §8.3 failure handling
+    // Abort if clipboard is empty after copy - per §8.3 failure handling
     if selected_text.trim().is_empty() {
         restore_clipboard(&original_clipboard);
         bail!("No text found to transform");
@@ -69,7 +69,7 @@ pub async fn execute_replacement(
     let prompt = match ai_client::get_prompt(command, param, &clean_text) {
         Some(p) => p,
         None => {
-            // This must be a custom command — the prompt will be resolved by the caller
+            // This must be a custom command - the prompt will be resolved by the caller
             // For now, bail if we can't find a prompt
             let _ = app.emit("flick://error", serde_json::json!({"message": "Unknown command"}));
             restore_clipboard(&original_clipboard);
@@ -101,7 +101,7 @@ pub async fn execute_replacement(
         bail!("Failed to paste: {}", e);
     }
 
-    // Step 10: Wait 100ms — per §8.3
+    // Step 10: Wait 100ms - per §8.3
     sleep(Duration::from_millis(100)).await;
 
     // Step 11: Restore original clipboard content
@@ -211,7 +211,7 @@ async fn select_and_copy() -> Result<String> {
     // Small delay to ensure previous key events are processed
     sleep(Duration::from_millis(50)).await;
 
-    // Ctrl+A — select all text in the active input field
+    // Ctrl+A - select all text in the active input field
     enigo.key(Key::Control, Direction::Press)
         .map_err(|e| anyhow::anyhow!("Key press failed: {:?}", e))?;
     enigo.key(Key::Unicode('a'), Direction::Click)
@@ -221,7 +221,7 @@ async fn select_and_copy() -> Result<String> {
 
     sleep(Duration::from_millis(50)).await;
 
-    // Ctrl+C — copy selected text
+    // Ctrl+C - copy selected text
     enigo.key(Key::Control, Direction::Press)
         .map_err(|e| anyhow::anyhow!("Key press failed: {:?}", e))?;
     enigo.key(Key::Unicode('c'), Direction::Click)

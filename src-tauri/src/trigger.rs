@@ -1,4 +1,4 @@
-// Flick — trigger.rs
+// Flick - trigger.rs
 // Per PRD §8.2: Trigger detection with regex for built-in + custom commands.
 // Checked against the buffer tail (last 40 chars) on every keypress.
 
@@ -16,12 +16,12 @@ pub struct TriggerMatch {
     pub full_trigger: String,
 }
 
-// Built-in simple commands regex — per §8.2
+// Built-in simple commands regex - per §8.2
 static SIMPLE_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"!(?P<cmd>fix|formal|casual|shorter|longer|rephrase|bullet|explain)$").unwrap()
 });
 
-// Built-in parameterized commands regex — per §8.2
+// Built-in parameterized commands regex - per §8.2
 static PARAM_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"!(?P<cmd>translate):(?P<param>[a-zA-Z]+)$").unwrap()
 });

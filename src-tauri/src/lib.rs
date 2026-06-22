@@ -1,4 +1,4 @@
-// Flick — lib.rs
+// Flick - lib.rs
 // Application entry point. Wires all modules together:
 // - Registers IPC commands
 // - Initializes system tray
@@ -70,12 +70,19 @@ pub fn run() {
                 config: Mutex::new(cfg),
             });
 
-            // Set up system tray — per §8.6
+            // Set up system tray - per §8.6
             if let Err(e) = tray::setup_tray(&app_handle) {
                 log::error!("Failed to set up system tray: {}", e);
             }
 
-            // Linux: Wayland detection warning — per §12.3
+            // Show the settings window on first launch so the packaged app
+            // doesn't appear to do nothing when started from the installer.
+            if let Some(window) = app_handle.get_webview_window("settings") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+
+            // Linux: Wayland detection warning - per §12.3
             #[cfg(target_os = "linux")]
             {
                 if std::env::var("WAYLAND_DISPLAY").is_ok() {
@@ -98,7 +105,7 @@ pub fn run() {
         .expect("Failed to run Flick");
 }
 
-/// Main hook event loop — runs on a dedicated thread.
+/// Main hook event loop - runs on a dedicated thread.
 /// Receives key events, updates the buffer, checks for triggers,
 /// and dispatches the replacement pipeline.
 fn run_hook_loop(app: AppHandle) {
@@ -135,7 +142,7 @@ fn run_hook_loop(app: AppHandle) {
             HookEvent::Char(c) => {
                 text_buffer.push_char(c);
 
-                // Check for trigger match — per §8.2
+                // Check for trigger match - per §8.2
                 let tail = text_buffer.get_tail(40);
                 let custom_triggers = app
                     .try_state::<AppState>()

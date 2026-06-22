@@ -1,4 +1,4 @@
-// Flick — tray.rs
+// Flick - tray.rs
 // Per PRD §8.6: System tray icon and menu.
 // Menu: Enabled toggle, Open Settings, Check for Updates, Quit.
 
@@ -8,7 +8,7 @@ use tauri::{
     AppHandle, Manager,
 };
 
-/// Set up the system tray icon and menu — per §8.6.
+/// Set up the system tray icon and menu - per §8.6.
 pub fn setup_tray(app: &AppHandle) -> Result<()> {
     let enabled_item = CheckMenuItemBuilder::with_id("enabled", "Enabled")
         .checked(true)

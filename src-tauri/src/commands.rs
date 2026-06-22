@@ -1,5 +1,5 @@
-// Flick — commands.rs
-// Tauri IPC command handlers — per PRD §8.5.
+// Flick - commands.rs
+// Tauri IPC command handlers - per PRD §8.5.
 // These bridge the Svelte frontend to the Rust backend.
 
 use crate::{ai_client, config, keychain};

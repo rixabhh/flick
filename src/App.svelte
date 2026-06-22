@@ -1,5 +1,6 @@
 <script>
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { onMount } from "svelte";
   import Settings from "./lib/Settings.svelte";
   import Toast from "./lib/Toast.svelte";
 
@@ -9,12 +10,19 @@
     try {
       const win = getCurrentWindow();
       windowLabel = win.label;
+
+      if (windowLabel === "settings") {
+        await win.show();
+        await win.setFocus();
+      }
     } catch {
       windowLabel = "settings";
     }
   }
 
-  detectWindow();
+  onMount(() => {
+    detectWindow();
+  });
 </script>
 
 {#if windowLabel === "toast"}

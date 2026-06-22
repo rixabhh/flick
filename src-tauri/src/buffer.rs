@@ -1,4 +1,4 @@
-// Flick — buffer.rs
+// Flick - buffer.rs
 // Per PRD §8.1: Per-window text buffer management
 // Single global buffer, max 5000 characters, with reset conditions.
 

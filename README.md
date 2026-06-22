@@ -14,7 +14,7 @@
 
 Flick is a cross-platform desktop utility that brings the power of LLMs directly to your cursor. Simply type a command prefix (e.g., `!translate` or `!casual`) followed by your text anywhere on your computer, and Flick instantly rewrites it in-place. 
 
-No context switching, no copy-pasting—just native text replacement powered by Google's Gemini Flash.
+No context switching, no copy-pasting-just native text replacement powered by Google's Gemini Flash.
 
 ## 📋 Table of Contents
 
