@@ -12,9 +12,9 @@
 
 <br />
 
-Flick is a cross-platform desktop utility that brings the power of LLMs directly to your cursor. Simply type a command prefix (e.g., `!translate` or `!casual`) followed by your text anywhere on your computer, and Flick instantly rewrites it in-place. 
+Flick is a cross-platform desktop utility that brings AI text transformation directly to your cursor. Simply type a trigger command (for example `!translate` or `!casual`) followed by your text anywhere on your computer, and Flick instantly rewrites it in-place.
 
-No context switching, no copy-pasting-just native text replacement powered by Google's Gemini Flash.
+No context switching, no copy-pasting — just native text replacement powered by your selected provider and model.
 
 ## 📋 Table of Contents
 
@@ -30,8 +30,11 @@ No context switching, no copy-pasting-just native text replacement powered by Go
 
 - **Global Integration:** Works seamlessly across any application, text editor, or browser.
 - **In-place Execution:** Replaces text natively at the cursor position without opening external windows.
+- **Provider Selection:** Choose between Gemini and OpenRouter from the settings panel.
+- **Model Control:** Select a Gemini model or enter an OpenRouter model manually.
 - **Customizable Pipelines:** Define custom triggers (e.g., `!summarize`, `!professional`) tailored to your workflow.
-- **BYOK (Bring Your Own Key):** Connect directly to the Gemini Flash API using your personal API key.
+- **BYOK (Bring Your Own Key):** Connect directly to your chosen provider using your personal API key.
+- **Secure Key Storage:** API keys are stored in your OS keychain/credential manager.
 - **Lightweight Footprint:** Built on Tauri v2 and Rust for minimal memory usage and lightning-fast execution.
 
 ## 🚀 How It Works
@@ -40,7 +43,7 @@ Flick runs silently in your system tray, monitoring keyboard input via an effici
 
 1. **Type a trigger:** Start typing anywhere, prefixing your text with a command (e.g., `!casual`).
 2. **Detection:** Flick captures the buffer and detects the trigger once you stop typing.
-3. **Processing:** The text is routed through your OS clipboard, sent to the Gemini API, and instantly pasted back to your active cursor position.
+3. **Processing:** The text is routed through your OS clipboard, sent to the selected AI provider, and instantly pasted back to your active cursor position.
 
 ## ⚡ Available Commands
 
@@ -107,8 +110,9 @@ Flick follows a strict separation of concerns, utilizing Tauri's split-process a
 We take privacy seriously. Flick is designed to be as secure as possible:
 
 - **Local Memory Buffer:** Keystrokes are temporarily held in an ephemeral memory buffer that is strictly bounded in size. The buffer is immediately cleared upon mouse clicks, Enter, or navigation keys.
-- **Secure Key Storage:** API keys are encrypted and stored using your operating system's native secure credential manager (Windows Credential Manager, macOS Keychain, or Linux Secret Service).
-- **Direct API Communication:** Flick communicates exclusively and directly with the Google Gemini API. There are no telemetry, analytics, or middleman servers.
+- **Secure Key Storage:** API keys are stored using your operating system's native secure credential manager (Windows Credential Manager, macOS Keychain, or Linux Secret Service).
+- **Direct API Communication:** Flick communicates directly with your chosen provider (Gemini or OpenRouter) and does not route requests through any extra server.
+- **No Telemetry:** The app does not collect analytics or usage telemetry by default.
 
 ## 📄 License
 
