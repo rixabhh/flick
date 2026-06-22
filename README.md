@@ -45,17 +45,25 @@ Flick runs silently in your system tray, monitoring keyboard input via an effici
 
 ## ⚡ Available Commands
 
-### Built-in 
-| Command | Description |
-|---|---|
-| `!translate [lang]` | Translates the preceding text into the specified language. |
-| `!grammar` | Corrects spelling and grammatical errors. |
+Flick comes with 9 powerful built-in commands designed to handle the most common writing tasks. 
 
-### Custom Triggers (Configurable)
-You can easily add new commands in the Settings panel:
-- `!casual` - Rewrites text to sound more casual.
-- `!professional` - Elevates the tone for business communication.
-- `!summarize` - Condenses long paragraphs.
+### Built-in Triggers
+| Command | What it does for you | Example Input |
+|---|---|---|
+| `!fix` | Cleans up grammar, spelling, and punctuation errors. | "this rly needs fixing!fix" |
+| `!formal` | Elevates your text into a professional, business-ready tone. | "hey im gonna be late to the meeting!formal" |
+| `!casual` | Softens your text to sound more friendly and relaxed. | "Please advise on the status of the project.!casual" |
+| `!shorter` | Condenses long-winded paragraphs into concise summaries. | "(A very long paragraph)!shorter" |
+| `!longer` | Expands brief notes or bullet points with rich detail and context. | "Product launch next week!longer" |
+| `!rephrase` | Rewrites your sentence completely while keeping the exact same meaning. | "It's hard to understand this.!rephrase" |
+| `!bullet` | Structures messy notes into a clean, readable bullet point list. | "milk eggs bread and some juice!bullet" |
+| `!explain` | Breaks down complex text into simple, easy-to-understand language. | "(Dense academic text)!explain" |
+| `!translate:<lang>` | Instantly translates your text to the specified language. | "Hello, how are you today?!translate:spanish" |
+
+### Build Your Own (Custom Triggers)
+Need something specific to your workflow? You can easily create custom triggers in the Settings panel:
+- Define a trigger (e.g., `!code`, `!tweet`, `!docs`)
+- Write a prompt template using the `{{text}}` variable (e.g., `"Turn this into a snarky tweet: {{text}}"`)
 
 ## 🏗️ Architecture
 
