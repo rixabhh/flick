@@ -1,5 +1,6 @@
 <script>
   import { invoke } from "@tauri-apps/api/core";
+  import { openUrl } from "@tauri-apps/plugin-opener";
 
   let { provider = "gemini", model = "gemini-2.5-flash-lite" } = $props();
 
@@ -72,6 +73,29 @@
   function toggleMask() {
     masked = !masked;
   }
+
+  function providerName() {
+    return provider === "openrouter" ? "OpenRouter" : "Gemini";
+  }
+
+  function keyPlaceholder() {
+    return `Enter your ${providerName()} API key`;
+  }
+
+  function keyLink() {
+    return provider === "openrouter"
+      ? "https://openrouter.ai/settings/keys"
+      : "https://aistudio.google.com/app/apikey";
+  }
+
+  async function openKeyLink(event) {
+    event.preventDefault();
+    try {
+      await openUrl(keyLink());
+    } catch (e) {
+      console.error("Failed to open API key link:", e);
+    }
+  }
 </script>
 
 <div class="api-section">
@@ -82,7 +106,7 @@
           id="api-key-input"
           type="password"
           bind:value={apiKey}
-          placeholder="Enter your Gemini API key"
+          placeholder={keyPlaceholder()}
           autocomplete="off"
         />
       {:else}
@@ -90,7 +114,7 @@
           id="api-key-input-visible"
           type="text"
           bind:value={apiKey}
-          placeholder="Enter your Gemini API key"
+          placeholder={keyPlaceholder()}
           autocomplete="off"
           class="mono"
         />
@@ -143,13 +167,13 @@
     </div>
   {/if}
 
-  <a class="api-link" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">
+  <a class="api-link" href={keyLink()} onclick={openKeyLink}>
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
       <polyline points="15 3 21 3 21 9"/>
       <line x1="10" y1="14" x2="21" y2="3"/>
     </svg>
-    Get a free Gemini API key
+    Get a {providerName()} API key
   </a>
 </div>
 

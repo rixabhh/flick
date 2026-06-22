@@ -65,19 +65,19 @@
 
 <div class="toast-container" class:visible={state !== "idle"} class:fade-out={state === "idle"}>
   {#if state === "transforming"}
-    <div class="toast toast-transforming animate-fade-in">
-      <div class="pulse-dot"></div>
-      <span class="toast-text">Flick is thinking…</span>
+    <div class="toast toast-transforming">
+      <span class="spinner" aria-hidden="true"></span>
+      <span class="toast-text">Transforming</span>
     </div>
   {:else if state === "done"}
-    <div class="toast toast-done animate-fade-in">
+    <div class="toast toast-done">
       <svg class="toast-icon" viewBox="0 0 20 20" fill="currentColor">
         <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
       </svg>
       <span class="toast-text">Done</span>
     </div>
   {:else if state === "error"}
-    <div class="toast toast-error animate-fade-in">
+    <div class="toast toast-error">
       <svg class="toast-icon" viewBox="0 0 20 20" fill="currentColor">
         <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
       </svg>
@@ -94,66 +94,79 @@
     width: 100%;
     height: 100%;
     opacity: 0;
-    transition: opacity 300ms ease;
+    transform: translateY(4px);
+    transition: opacity 160ms ease, transform 160ms ease;
   }
 
   .toast-container.visible {
     opacity: 1;
+    transform: translateY(0);
   }
 
   .toast {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    border-radius: 24px;
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    gap: 10px;
+    width: fit-content;
+    min-height: 42px;
+    padding: 10px 14px;
+    border: 1px solid var(--border-hover);
+    border-radius: 10px;
+    background: rgba(23, 25, 28, 0.96);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.32);
     white-space: nowrap;
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     font-family: var(--font-body);
+    max-width: calc(100% - 16px);
   }
 
   .toast-transforming {
-    background: rgba(0, 229, 255, 0.12);
-    border: 1px solid rgba(0, 229, 255, 0.25);
-    color: #00e5ff;
+    color: var(--text-primary);
   }
 
   .toast-done {
-    background: rgba(0, 229, 160, 0.12);
-    border: 1px solid rgba(0, 229, 160, 0.25);
-    color: #00e5a0;
+    color: var(--success);
   }
 
   .toast-error {
-    background: rgba(255, 68, 68, 0.12);
-    border: 1px solid rgba(255, 68, 68, 0.25);
-    color: #ff4444;
+    border-color: rgba(255, 107, 107, 0.32);
+    color: var(--error);
   }
 
   .toast-text {
-    letter-spacing: 0.01em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .toast-error .toast-text {
+    display: -webkit-box;
+    line-clamp: 2;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .toast-icon {
-    width: 14px;
-    height: 14px;
+    width: 15px;
+    height: 15px;
     flex-shrink: 0;
   }
 
-  .pulse-dot {
-    width: 8px;
-    height: 8px;
+  .spinner {
+    width: 15px;
+    height: 15px;
+    border: 2px solid var(--border-hover);
+    border-top-color: var(--text-primary);
     border-radius: 50%;
-    background: #00e5ff;
-    animation: pulse 1.2s ease-in-out infinite;
+    animation: spin 720ms linear infinite;
     flex-shrink: 0;
   }
 
-  @keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.4; transform: scale(0.8); }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>

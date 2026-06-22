@@ -7,6 +7,7 @@
     { trigger: "!casual", description: "Rewrite in casual, friendly tone" },
     { trigger: "!shorter", description: "Make text shorter and more concise" },
     { trigger: "!longer", description: "Expand with more detail and context" },
+    { trigger: "!improve", description: "Improve clarity, flow, and readability" },
     { trigger: "!rephrase", description: "Rephrase keeping same meaning" },
     { trigger: "!bullet", description: "Convert into bullet point list" },
     { trigger: "!explain", description: "Rewrite in simple, easy language" },
@@ -21,36 +22,85 @@
   let editTrigger = $state("");
   let editPrompt = $state("");
   let showAddForm = $state(false);
+  let commandMessage = $state("");
+  let commandMessageType = $state("error");
+
+  const BUILTIN_TRIGGER_NAMES = new Set(
+    BUILTIN_COMMANDS.map((cmd) => cmd.trigger.replace(/^!/, "").split(":")[0])
+  );
+
+  function normalizeTrigger(value) {
+    return value.trim().replace(/^!/, "").toLowerCase();
+  }
+
+  function showMessage(message, type = "error") {
+    commandMessage = message;
+    commandMessageType = type;
+  }
+
+  function clearMessage() {
+    commandMessage = "";
+  }
+
+  function validateCommand(trigger, prompt, currentIndex = -1) {
+    if (!trigger) return "Add a trigger name.";
+    if (!/^[a-z][a-z0-9_-]{1,31}$/.test(trigger)) {
+      return "Use 2-32 lowercase letters, numbers, dashes, or underscores.";
+    }
+    if (BUILTIN_TRIGGER_NAMES.has(trigger)) {
+      return `!${trigger} is already a built-in command.`;
+    }
+    if (!prompt) return "Add a prompt template.";
+    if (!prompt.includes("{{text}}")) {
+      return "Prompt template must include {{text}}.";
+    }
+    const duplicateIndex = customCommands.findIndex((cmd) => cmd.trigger === trigger);
+    if (duplicateIndex !== -1 && duplicateIndex !== currentIndex) {
+      return `!${trigger} already exists.`;
+    }
+    return "";
+  }
 
   function startAdd() {
+    clearMessage();
     showAddForm = true;
     newTrigger = "";
-    newPrompt = "{{text}}";
+    newPrompt = "Improve the following text: {{text}}";
     editingIndex = -1;
   }
 
   function cancelAdd() {
+    clearMessage();
     showAddForm = false;
     newTrigger = "";
     newPrompt = "";
   }
 
   async function addCommand() {
-    const trigger = newTrigger.trim().replace(/^!/, "");
+    const trigger = normalizeTrigger(newTrigger);
     const prompt = newPrompt.trim();
-    if (!trigger || !prompt) return;
+    const validationError = validateCommand(trigger, prompt);
+    if (validationError) {
+      showMessage(validationError);
+      return;
+    }
 
     try {
       await invoke("add_custom_command", { trigger, prompt });
       customCommands = [...customCommands, { trigger, prompt }];
       onUpdate(customCommands);
-      cancelAdd();
+      showMessage(`Added !${trigger}`, "success");
+      showAddForm = false;
+      newTrigger = "";
+      newPrompt = "";
     } catch (e) {
+      showMessage(`Failed to add command: ${e}`);
       console.error("Failed to add command:", e);
     }
   }
 
   function startEdit(index) {
+    clearMessage();
     editingIndex = index;
     editTrigger = customCommands[index].trigger;
     editPrompt = customCommands[index].prompt;
@@ -58,15 +108,20 @@
   }
 
   function cancelEdit() {
+    clearMessage();
     editingIndex = -1;
     editTrigger = "";
     editPrompt = "";
   }
 
   async function saveEdit(index) {
-    const trigger = editTrigger.trim().replace(/^!/, "");
+    const trigger = normalizeTrigger(editTrigger);
     const prompt = editPrompt.trim();
-    if (!trigger || !prompt) return;
+    const validationError = validateCommand(trigger, prompt, index);
+    if (validationError) {
+      showMessage(validationError);
+      return;
+    }
 
     try {
       await invoke("update_custom_command", { index, trigger, prompt });
@@ -75,6 +130,7 @@
       onUpdate(customCommands);
       cancelEdit();
     } catch (e) {
+      showMessage(`Failed to update command: ${e}`);
       console.error("Failed to update command:", e);
     }
   }
@@ -86,6 +142,7 @@
       onUpdate(customCommands);
       if (editingIndex === index) cancelEdit();
     } catch (e) {
+      showMessage(`Failed to delete command: ${e}`);
       console.error("Failed to delete command:", e);
     }
   }
@@ -125,6 +182,12 @@
     {#if customCommands.length === 0 && !showAddForm}
       <div class="empty-state">
         <span class="text-muted">No custom commands yet. Add one to extend Flick with your own triggers.</span>
+      </div>
+    {/if}
+
+    {#if commandMessage}
+      <div class="command-message" class:success={commandMessageType === "success"}>
+        {commandMessage}
       </div>
     {/if}
 
@@ -274,6 +337,21 @@
     text-align: center;
     padding: var(--space-xl);
     font-size: 0.85rem;
+  }
+
+  .command-message {
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid rgba(255, 107, 107, 0.28);
+    border-radius: var(--radius);
+    background: var(--error-dim);
+    color: var(--error);
+    font-size: 0.8rem;
+  }
+
+  .command-message.success {
+    border-color: rgba(121, 217, 159, 0.28);
+    background: var(--success-dim);
+    color: var(--success);
   }
 
   .edit-form {

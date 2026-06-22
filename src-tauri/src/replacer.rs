@@ -6,11 +6,16 @@
 use anyhow::{bail, Context, Result};
 use arboard::Clipboard;
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use tokio::time::sleep;
 
 use crate::ai_client;
+
+const KEY_SETTLE_DELAY: Duration = Duration::from_millis(25);
+const CLIPBOARD_COPY_DELAY: Duration = Duration::from_millis(60);
+const CLIPBOARD_RESTORE_DELAY: Duration = Duration::from_millis(50);
+const PASTE_DELAY: Duration = Duration::from_millis(35);
 
 /// Execute the full text replacement pipeline - per §8.3.
 pub async fn execute_replacement(
@@ -23,6 +28,8 @@ pub async fn execute_replacement(
     trigger: &str,
     show_done_toast: bool,
 ) -> Result<()> {
+    let started_at = Instant::now();
+
     // Step 1: Save current clipboard content
     let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
     let original_clipboard = clipboard.get_text().unwrap_or_default();
@@ -43,6 +50,7 @@ pub async fn execute_replacement(
             bail!("Failed to select and copy text: {}", e);
         }
     };
+    let clipboard_ms = started_at.elapsed().as_millis();
 
     // Abort if clipboard is empty after copy - per §8.3 failure handling
     if selected_text.trim().is_empty() {
@@ -88,6 +96,7 @@ pub async fn execute_replacement(
             bail!("API transform failed: {}", e);
         }
     };
+    let ai_ms = started_at.elapsed().as_millis().saturating_sub(clipboard_ms);
 
     // Step 8: Set transformed text as clipboard content
     {
@@ -103,8 +112,8 @@ pub async fn execute_replacement(
         bail!("Failed to paste: {}", e);
     }
 
-    // Step 10: Wait 100ms - per §8.3
-    sleep(Duration::from_millis(100)).await;
+    // Step 10: Wait briefly so the paste completes before restoring clipboard.
+    sleep(CLIPBOARD_RESTORE_DELAY).await;
 
     // Step 11: Restore original clipboard content
     restore_clipboard(&original_clipboard);
@@ -113,6 +122,13 @@ pub async fn execute_replacement(
     if show_done_toast {
         let _ = app.emit("flick://done", ());
     }
+
+    log::info!(
+        "Replacement completed in {}ms (clipboard: {}ms, ai: {}ms)",
+        started_at.elapsed().as_millis(),
+        clipboard_ms,
+        ai_ms
+    );
 
     Ok(())
 }
@@ -127,6 +143,8 @@ pub async fn execute_custom_replacement(
     trigger: &str,
     show_done_toast: bool,
 ) -> Result<()> {
+    let started_at = Instant::now();
+
     // Step 1: Save current clipboard
     let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
     let original_clipboard = clipboard.get_text().unwrap_or_default();
@@ -145,6 +163,7 @@ pub async fn execute_custom_replacement(
             bail!("Failed to select and copy text: {}", e);
         }
     };
+    let clipboard_ms = started_at.elapsed().as_millis();
 
     if selected_text.trim().is_empty() {
         restore_clipboard(&original_clipboard);
@@ -178,6 +197,7 @@ pub async fn execute_custom_replacement(
             bail!("API transform failed: {}", e);
         }
     };
+    let ai_ms = started_at.elapsed().as_millis().saturating_sub(clipboard_ms);
 
     // Step 8: Set clipboard
     {
@@ -193,8 +213,8 @@ pub async fn execute_custom_replacement(
         bail!("Failed to paste: {}", e);
     }
 
-    // Step 10: Wait
-    sleep(Duration::from_millis(100)).await;
+    // Step 10: Wait briefly so the paste completes before restoring clipboard.
+    sleep(CLIPBOARD_RESTORE_DELAY).await;
 
     // Step 11: Restore clipboard
     restore_clipboard(&original_clipboard);
@@ -203,6 +223,13 @@ pub async fn execute_custom_replacement(
     if show_done_toast {
         let _ = app.emit("flick://done", ());
     }
+
+    log::info!(
+        "Custom replacement completed in {}ms (clipboard: {}ms, ai: {}ms)",
+        started_at.elapsed().as_millis(),
+        clipboard_ms,
+        ai_ms
+    );
 
     Ok(())
 }
@@ -213,7 +240,7 @@ async fn select_and_copy() -> Result<String> {
         .map_err(|e| anyhow::anyhow!("Failed to create Enigo instance: {:?}", e))?;
 
     // Small delay to ensure previous key events are processed
-    sleep(Duration::from_millis(50)).await;
+    sleep(KEY_SETTLE_DELAY).await;
 
     // Ctrl+A - select all text in the active input field
     enigo.key(Key::Control, Direction::Press)
@@ -223,7 +250,7 @@ async fn select_and_copy() -> Result<String> {
     enigo.key(Key::Control, Direction::Release)
         .map_err(|e| anyhow::anyhow!("Key release failed: {:?}", e))?;
 
-    sleep(Duration::from_millis(50)).await;
+    sleep(KEY_SETTLE_DELAY).await;
 
     // Ctrl+C - copy selected text
     enigo.key(Key::Control, Direction::Press)
@@ -234,7 +261,7 @@ async fn select_and_copy() -> Result<String> {
         .map_err(|e| anyhow::anyhow!("Key release failed: {:?}", e))?;
 
     // Wait for clipboard to update
-    sleep(Duration::from_millis(100)).await;
+    sleep(CLIPBOARD_COPY_DELAY).await;
 
     // Read clipboard content
     let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
@@ -254,6 +281,6 @@ async fn simulate_paste() -> Result<()> {
     enigo.key(Key::Control, Direction::Release)
         .map_err(|e| anyhow::anyhow!("Key release failed: {:?}", e))?;
 
-    sleep(Duration::from_millis(50)).await;
+    sleep(PASTE_DELAY).await;
     Ok(())
 }

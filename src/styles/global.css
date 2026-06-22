@@ -5,27 +5,27 @@
 
 :root {
   /* Core palette */
-  --bg-primary: #0f0f0f;
-  --bg-surface: #1a1a1a;
-  --bg-elevated: #242424;
-  --accent: #00e5ff;
-  --accent-dim: #00b8cc;
-  --accent-glow: rgba(0, 229, 255, 0.15);
-  --accent-glow-strong: rgba(0, 229, 255, 0.3);
-  --text-primary: #f0f0f0;
-  --text-secondary: #888888;
-  --text-muted: #555555;
-  --error: #ff4444;
-  --error-dim: rgba(255, 68, 68, 0.15);
-  --success: #00e5a0;
-  --success-dim: rgba(0, 229, 160, 0.15);
-  --border: #2a2a2a;
-  --border-hover: #3a3a3a;
+  --bg-primary: #101113;
+  --bg-surface: #17191c;
+  --bg-elevated: #202329;
+  --accent: #8fb7ff;
+  --accent-dim: #6d96df;
+  --accent-glow: rgba(143, 183, 255, 0.14);
+  --accent-glow-strong: rgba(143, 183, 255, 0.22);
+  --text-primary: #f2f4f8;
+  --text-secondary: #a2a9b5;
+  --text-muted: #697180;
+  --error: #ff6b6b;
+  --error-dim: rgba(255, 107, 107, 0.14);
+  --success: #79d99f;
+  --success-dim: rgba(121, 217, 159, 0.14);
+  --border: #2a2e36;
+  --border-hover: #3a414d;
 
   /* Dimensions */
   --radius: 8px;
   --radius-sm: 4px;
-  --radius-lg: 12px;
+  --radius-lg: 10px;
   --radius-xl: 16px;
 
   /* Typography */
@@ -49,7 +49,7 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 20px rgba(0, 229, 255, 0.1);
+  --shadow-glow: 0 0 0 3px var(--accent-glow);
 }
 
 /* ========== Reset ========== */
@@ -120,13 +120,14 @@ button {
 
 input[type="text"],
 input[type="password"] {
-  background: var(--bg-primary);
+  background: #0d0e10;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: var(--space-sm) var(--space-md);
   color: var(--text-primary);
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
   width: 100%;
+  min-height: 36px;
 }
 
 input[type="text"]:focus,
@@ -138,6 +139,42 @@ input[type="password"]:focus {
 input[type="text"]::placeholder,
 input[type="password"]::placeholder {
   color: var(--text-muted);
+}
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: #0d0e10;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a2a9b5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right 10px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  cursor: pointer;
+  min-height: 36px;
+  padding: var(--space-sm) 36px var(--space-sm) var(--space-md);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
+  width: 100%;
+}
+
+select:hover {
+  border-color: var(--border-hover);
+  background-color: var(--bg-surface);
+}
+
+select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+select option {
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 textarea {
@@ -165,7 +202,7 @@ textarea:focus {
   justify-content: center;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-lg);
-  border-radius: var(--radius);
+  border-radius: 7px;
   border: 1px solid transparent;
   font-weight: 500;
   font-size: 0.85rem;
@@ -179,15 +216,14 @@ textarea:focus {
 }
 
 .btn-primary {
-  background: var(--accent);
-  color: var(--bg-primary);
-  border-color: var(--accent);
+  background: #f2f4f8;
+  color: #101113;
+  border-color: #f2f4f8;
 }
 
 .btn-primary:hover {
-  background: var(--accent-dim);
-  border-color: var(--accent-dim);
-  box-shadow: var(--shadow-glow);
+  background: #dbe3ef;
+  border-color: #dbe3ef;
 }
 
 .btn-secondary {
@@ -277,7 +313,7 @@ textarea:focus {
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--bg-primary);
+  background: #0d0e10;
   border: 1px solid var(--border);
   border-radius: 11px;
   transition: all var(--transition-fast);
@@ -296,13 +332,13 @@ textarea:focus {
 }
 
 .toggle input:checked + .toggle-slider {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-dim);
+  border-color: var(--accent-dim);
 }
 
 .toggle input:checked + .toggle-slider::before {
   transform: translateX(18px);
-  background: var(--bg-primary);
+  background: var(--text-primary);
 }
 
 /* ========== Cards / Panels ========== */
@@ -333,7 +369,7 @@ textarea:focus {
 .section-icon {
   width: 20px;
   height: 20px;
-  color: var(--accent);
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 

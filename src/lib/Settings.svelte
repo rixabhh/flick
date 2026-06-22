@@ -1,5 +1,6 @@
 <script>
   import { invoke } from "@tauri-apps/api/core";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import ApiKeyInput from "./ApiKeyInput.svelte";
@@ -24,6 +25,11 @@
     { id: "about", label: "About", icon: "info" },
   ];
 
+  const defaultModels = {
+    gemini: "gemini-2.5-flash-lite",
+    openrouter: "openrouter/free",
+  };
+
   onMount(async () => {
     try {
       const cfg = await invoke("get_config");
@@ -40,6 +46,22 @@
 
   async function updateConfig(field, value) {
     config[field] = value;
+    try {
+      await invoke("save_config", { config });
+    } catch (e) {
+      console.error("Failed to save config:", e);
+    }
+  }
+
+  async function handleProviderChange() {
+    const currentModel = config.model || "";
+    if (config.provider === "gemini" && !currentModel.startsWith("gemini-")) {
+      config.model = defaultModels.gemini;
+    }
+    if (config.provider === "openrouter" && currentModel.startsWith("gemini-")) {
+      config.model = defaultModels.openrouter;
+    }
+
     try {
       await invoke("save_config", { config });
     } catch (e) {
@@ -76,6 +98,15 @@
       await win.hide();
     } catch {}
   }
+
+  async function openExternal(event, url) {
+    event.preventDefault();
+    try {
+      await openUrl(url);
+    } catch (e) {
+      console.error("Failed to open external link:", e);
+    }
+  }
 </script>
 
 <div class="settings-window">
@@ -83,7 +114,13 @@
   <div class="title-bar" data-tauri-drag-region>
     <div class="title-bar-content">
       <div class="app-brand">
-        <span class="app-icon">⚡</span>
+        <span class="app-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M7 19V5h10" />
+            <path d="M7 12h8" />
+            <path d="M16 5l-9 14" />
+          </svg>
+        </span>
         <span class="app-name">Flick</span>
       </div>
       <button class="close-btn" onclick={closeWindow} title="Close">
@@ -153,7 +190,7 @@
         <div class="provider-controls">
           <label>
             <span>Provider</span>
-            <select bind:value={config.provider} onchange={() => updateConfig("provider", config.provider)}>
+            <select bind:value={config.provider} onchange={handleProviderChange}>
               <option value="gemini">Gemini</option>
               <option value="openrouter">OpenRouter</option>
             </select>
@@ -258,24 +295,36 @@
       <div class="panel-section animate-fade-in">
         <div class="about-content">
           <div class="about-hero">
-            <span class="about-icon">⚡</span>
+            <span class="about-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M7 19V5h10" />
+                <path d="M7 12h8" />
+                <path d="M16 5l-9 14" />
+              </svg>
+            </span>
             <h2 class="about-name">Flick</h2>
             <span class="about-tagline">Type. Trigger. Done.</span>
             <span class="about-version badge badge-muted">v{version}</span>
           </div>
 
           <div class="about-links">
-            <a class="about-link" href="https://github.com/rixabhh/flick" target="_blank" rel="noopener noreferrer">
+            <a class="about-link" href="https://github.com/rixabhh/flick" onclick={(event) => openExternal(event, "https://github.com/rixabhh/flick")}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
               </svg>
-              GitHub
+              Repository
+            </a>
+            <a class="about-link" href="https://github.com/rixabhh" onclick={(event) => openExternal(event, "https://github.com/rixabhh")}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+              </svg>
+              rixabhh
             </a>
           </div>
 
           <p class="about-footer text-muted">
             Built with Rust + Tauri + Svelte<br/>
-            Powered by Gemini Flash
+            Built by <a href="https://github.com/rixabhh" onclick={(event) => openExternal(event, "https://github.com/rixabhh")}>Rishabh</a>
           </p>
         </div>
       </div>
@@ -295,10 +344,10 @@
   /* ===== Title Bar ===== */
   .title-bar {
     -webkit-app-region: drag;
-    background: var(--bg-surface);
+    background: var(--bg-primary);
     border-bottom: 1px solid var(--border);
     padding: 0 var(--space-lg);
-    height: 44px;
+    height: 48px;
     display: flex;
     align-items: center;
     flex-shrink: 0;
@@ -314,21 +363,36 @@
   .app-brand {
     display: flex;
     align-items: center;
-    gap: var(--space-sm);
+    gap: 10px;
   }
 
   .app-icon {
-    font-size: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--border-hover);
+    border-radius: 6px;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    font-size: 0.76rem;
+    font-weight: 700;
+  }
+
+  .app-icon svg {
+    width: 15px;
+    height: 15px;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
   .app-name {
     font-weight: 700;
     font-size: 0.95rem;
-    letter-spacing: 0.02em;
-    background: linear-gradient(135deg, var(--accent), var(--accent-dim));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--text-primary);
   }
 
   .close-btn {
@@ -353,8 +417,8 @@
   /* ===== Tab Navigation ===== */
   .tab-nav {
     display: flex;
-    gap: 2px;
-    padding: var(--space-sm) var(--space-lg);
+    gap: 4px;
+    padding: 10px var(--space-lg);
     background: var(--bg-surface);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
@@ -363,14 +427,15 @@
   .tab-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: var(--space-sm) var(--space-md);
+    gap: 7px;
+    min-height: 34px;
+    padding: 7px var(--space-md);
     background: transparent;
     border: none;
-    border-radius: var(--radius);
+    border-radius: 6px;
     color: var(--text-secondary);
-    font-size: 0.82rem;
-    font-weight: 500;
+    font-size: 0.8rem;
+    font-weight: 600;
     cursor: pointer;
     transition: all var(--transition-fast);
     flex: 1;
@@ -383,21 +448,22 @@
   }
 
   .tab-btn.active {
-    color: var(--accent);
-    background: var(--accent-glow);
+    color: var(--text-primary);
+    background: var(--bg-elevated);
+    box-shadow: inset 0 0 0 1px var(--border-hover);
   }
 
   /* ===== Tab Content ===== */
   .tab-content {
     flex: 1;
     overflow-y: auto;
-    padding: var(--space-xl);
+    padding: 22px var(--space-xl) var(--space-xl);
   }
 
   .panel-section {
     display: flex;
     flex-direction: column;
-    gap: var(--space-lg);
+    gap: 18px;
   }
 
   .section-desc {
@@ -406,9 +472,31 @@
     line-height: 1.6;
   }
 
+  .provider-controls {
+    display: grid;
+    grid-template-columns: minmax(132px, 0.72fr) minmax(0, 1.28fr);
+    gap: var(--space-md);
+  }
+
+  .provider-controls label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .provider-controls label > span {
+    color: var(--text-secondary);
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
   .toggles-list {
     display: flex;
     flex-direction: column;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
   }
 
   /* ===== About ===== */
@@ -416,8 +504,8 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--space-2xl);
-    padding: var(--space-2xl) 0;
+    gap: 24px;
+    padding: 28px 0;
   }
 
   .about-hero {
@@ -428,24 +516,37 @@
   }
 
   .about-icon {
-    font-size: 48px;
-    filter: drop-shadow(0 0 20px rgba(0, 229, 255, 0.3));
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border: 1px solid var(--border-hover);
+    border-radius: 14px;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    font-size: 1.4rem;
+    font-weight: 800;
+  }
+
+  .about-icon svg {
+    width: 30px;
+    height: 30px;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
   .about-name {
-    font-size: 1.8rem;
+    font-size: 1.5rem;
     font-weight: 700;
-    letter-spacing: 0.04em;
-    background: linear-gradient(135deg, var(--accent), #00ffcc);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--text-primary);
   }
 
   .about-tagline {
     font-size: 0.9rem;
     color: var(--text-secondary);
-    font-style: italic;
   }
 
   .about-version {
@@ -471,9 +572,9 @@
   }
 
   .about-link:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-    background: var(--accent-glow);
+    border-color: var(--border-hover);
+    color: var(--text-primary);
+    background: var(--bg-elevated);
     text-decoration: none;
   }
 
@@ -481,5 +582,15 @@
     text-align: center;
     font-size: 0.78rem;
     line-height: 1.8;
+  }
+
+  .about-footer a {
+    color: var(--text-secondary);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .about-footer a:hover {
+    color: var(--text-primary);
   }
 </style>

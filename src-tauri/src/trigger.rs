@@ -18,7 +18,7 @@ pub struct TriggerMatch {
 
 // Built-in simple commands regex - per §8.2
 static SIMPLE_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"!(?P<cmd>fix|formal|casual|shorter|longer|rephrase|bullet|explain)$").unwrap()
+    Regex::new(r"!(?P<cmd>fix|formal|casual|shorter|longer|improve|rephrase|bullet|explain)$").unwrap()
 });
 
 // Built-in parameterized commands regex - per §8.2
@@ -58,15 +58,15 @@ pub fn detect_builtin(text: &str) -> Option<TriggerMatch> {
 /// Custom triggers are provided as a list of trigger words (without the `!` prefix).
 pub fn detect_custom(text: &str, custom_triggers: &[String]) -> Option<TriggerMatch> {
     for trigger in custom_triggers {
-        let pattern = format!("!{}$", regex::escape(trigger));
-        if let Ok(re) = Regex::new(&pattern) {
-            if re.is_match(text) {
-                return Some(TriggerMatch {
-                    command: trigger.clone(),
-                    param: None,
-                    full_trigger: format!("!{}", trigger),
-                });
-            }
+        if text
+            .strip_suffix(trigger.as_str())
+            .is_some_and(|prefix| prefix.ends_with('!'))
+        {
+            return Some(TriggerMatch {
+                command: trigger.clone(),
+                param: None,
+                full_trigger: format!("!{}", trigger),
+            });
         }
     }
     None
@@ -107,7 +107,7 @@ mod tests {
 
     #[test]
     fn test_all_simple_commands() {
-        for cmd in &["fix", "formal", "casual", "shorter", "longer", "rephrase", "bullet", "explain"] {
+        for cmd in &["fix", "formal", "casual", "shorter", "longer", "improve", "rephrase", "bullet", "explain"] {
             let input = format!("test text!{}", cmd);
             let result = detect_builtin(&input);
             assert!(result.is_some(), "Failed for command: {}", cmd);

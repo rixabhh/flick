@@ -4,14 +4,54 @@
 // 10-second timeout per §8.3.
 
 use anyhow::{bail, Context, Result};
+use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde_json::{json, Value};
 use std::time::Duration;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
-const GEMINI_BASE_URL: &str =
-    "https://generativelanguage.googleapis.com/v1beta/models";
+const MAX_OUTPUT_TOKENS: u32 = 1024;
+const GEMINI_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta/models";
 const OPENROUTER_BASE_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
+
+static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
+    Client::builder()
+        .timeout(REQUEST_TIMEOUT)
+        .build()
+        .expect("failed to build shared HTTP client")
+});
+
+fn provider_error_message(body_text: &str) -> String {
+    serde_json::from_str::<Value>(body_text)
+        .ok()
+        .and_then(|body| {
+            body.get("error")
+                .and_then(|error| {
+                    error
+                        .get("message")
+                        .and_then(|v| v.as_str())
+                        .or_else(|| error.get("reason").and_then(|v| v.as_str()))
+                })
+                .or_else(|| body.get("message").and_then(|v| v.as_str()))
+                .or_else(|| body.get("reason").and_then(|v| v.as_str()))
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| body_text.trim().to_string())
+}
+
+fn first_text_from_openrouter_content(content: &Value) -> Option<&str> {
+    content.as_str().or_else(|| {
+        content.as_array().and_then(|parts| {
+            parts.iter().find_map(|part| {
+                part.as_str().or_else(|| {
+                    part.get("text")
+                        .and_then(|v| v.as_str())
+                        .or_else(|| part.get("content").and_then(|v| v.as_str()))
+                })
+            })
+        })
+    })
+}
 
 /// Built-in prompt templates - per PRD §9.
 /// Returns the full prompt with {{text}} substituted.
@@ -22,6 +62,7 @@ pub fn get_prompt(command: &str, param: Option<&str>, text: &str) -> Option<Stri
         "casual" => "Rewrite the following text in a casual, friendly, conversational tone. Return only the rewritten text: {{text}}".to_string(),
         "shorter" => "Make the following text shorter and more concise while keeping the core meaning. Return only the shortened text: {{text}}".to_string(),
         "longer" => "Expand the following text with more detail and context. Return only the expanded text: {{text}}".to_string(),
+        "improve" => "Improve the following text for clarity, flow, grammar, and readability while preserving the original meaning and tone. Return only the improved text: {{text}}".to_string(),
         "rephrase" => "Rephrase the following text in a different way while keeping the same meaning. Return only the rephrased text: {{text}}".to_string(),
         "bullet" => "Convert the following text into a clear, well-structured bullet point list. Return only the bullet points: {{text}}".to_string(),
         "explain" => "Rewrite the following text in simple, easy-to-understand language. Return only the simplified text: {{text}}".to_string(),
@@ -42,14 +83,9 @@ pub async fn transform_text(
     model: &str,
     prompt: &str,
 ) -> Result<String> {
-    let client = Client::builder()
-        .timeout(REQUEST_TIMEOUT)
-        .build()
-        .context("Failed to build HTTP client")?;
-
     match provider {
         "openrouter" => {
-            let response = client
+            let response = HTTP_CLIENT
                 .post(OPENROUTER_BASE_URL)
                 .header("Authorization", format!("Bearer {}", api_key))
                 .header("HTTP-Referer", "https://github.com/rixabhh/flick")
@@ -60,7 +96,8 @@ pub async fn transform_text(
                         "role": "user",
                         "content": prompt
                     }],
-                    "temperature": 0.3
+                    "temperature": 0.3,
+                    "max_tokens": MAX_OUTPUT_TOKENS
                 }))
                 .send()
                 .await
@@ -69,7 +106,8 @@ pub async fn transform_text(
             if !response.status().is_success() {
                 let status = response.status();
                 let body_text = response.text().await.unwrap_or_default();
-                bail!("OpenRouter API returned {}: {}", status, body_text);
+                let message = provider_error_message(&body_text);
+                bail!("OpenRouter rejected the request ({}): {}", status, message);
             }
 
             let response_json: Value = response
@@ -82,17 +120,7 @@ pub async fn transform_text(
                 .and_then(|c| c.get(0))
                 .and_then(|c| c.get("message"))
                 .and_then(|m| m.get("content"))
-                .and_then(|v| v.as_str())
-                .or_else(|| {
-                    response_json
-                        .get("choices")
-                        .and_then(|c| c.get(0))
-                        .and_then(|c| c.get("message"))
-                        .and_then(|m| m.get("content"))
-                        .and_then(|v| v.as_array())
-                        .and_then(|arr| arr.get(0))
-                        .and_then(|v| v.as_str())
-                })
+                .and_then(first_text_from_openrouter_content)
                 .context("Unexpected OpenRouter response structure")?;
 
             Ok(text.trim().to_string())
@@ -100,9 +128,7 @@ pub async fn transform_text(
         _ => {
             let url = format!(
                 "{}/{}:generateContent?key={}",
-                GEMINI_BASE_URL,
-                model,
-                api_key
+                GEMINI_BASE_URL, model, api_key
             );
 
             let body = json!({
@@ -113,11 +139,11 @@ pub async fn transform_text(
                 }],
                 "generationConfig": {
                     "temperature": 0.3,
-                    "maxOutputTokens": 2048
+                    "maxOutputTokens": MAX_OUTPUT_TOKENS
                 }
             });
 
-            let response = client
+            let response = HTTP_CLIENT
                 .post(&url)
                 .json(&body)
                 .send()
@@ -127,7 +153,8 @@ pub async fn transform_text(
             if !response.status().is_success() {
                 let status = response.status();
                 let body_text = response.text().await.unwrap_or_default();
-                bail!("Gemini API returned {}: {}", status, body_text);
+                let message = provider_error_message(&body_text);
+                bail!("Gemini rejected the request ({}): {}", status, message);
             }
 
             let response_json: Value = response
@@ -151,11 +178,7 @@ pub async fn transform_text(
 }
 
 /// Test the API connection with a minimal request.
-pub async fn test_connection(
-    api_key: &str,
-    provider: &str,
-    model: &str,
-) -> Result<()> {
+pub async fn test_connection(api_key: &str, provider: &str, model: &str) -> Result<()> {
     let prompt = "Reply with exactly: OK";
     let result = transform_text(api_key, provider, model, prompt).await?;
     if result.is_empty() {
@@ -189,8 +212,15 @@ mod tests {
 
     #[test]
     fn test_all_builtin_commands_have_prompts() {
-        for cmd in &["fix", "formal", "casual", "shorter", "longer", "rephrase", "bullet", "explain"] {
-            assert!(get_prompt(cmd, None, "test").is_some(), "Missing prompt for: {}", cmd);
+        for cmd in &[
+            "fix", "formal", "casual", "shorter", "longer", "improve", "rephrase", "bullet",
+            "explain",
+        ] {
+            assert!(
+                get_prompt(cmd, None, "test").is_some(),
+                "Missing prompt for: {}",
+                cmd
+            );
         }
         assert!(get_prompt("translate", Some("french"), "test").is_some());
     }
