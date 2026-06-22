@@ -4,7 +4,6 @@
   <p><strong>System-wide AI text transformation at your fingertips.</strong></p>
 
   <p>
-    <a href="https://github.com/rixabhh/flick/actions"><img src="https://img.shields.io/github/actions/workflow/status/rixabhh/flick/release.yml?style=flat-square" alt="Build Status"></a>
     <a href="https://v2.tauri.app/"><img src="https://img.shields.io/badge/Tauri-v2-24C8DB?style=flat-square&logo=tauri" alt="Tauri v2"></a>
     <a href="https://svelte.dev/"><img src="https://img.shields.io/badge/Svelte-UI-FF3E00?style=flat-square&logo=svelte" alt="Svelte UI"></a>
     <a href="https://choosealicense.com/licenses/mit/"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
