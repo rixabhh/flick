@@ -19,7 +19,7 @@ use buffer::TextBuffer;
 use config::FlickConfig;
 use key_hook::HookEvent;
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 /// Shared application state accessible from commands and the event loop.
 pub struct AppState {
