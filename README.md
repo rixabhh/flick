@@ -23,6 +23,7 @@ No context switching, no copy-pasting — just native text replacement powered b
 - [Available Commands](#-available-commands)
 - [Architecture](#-architecture)
 - [Getting Started](#-getting-started)
+- [Installation Guide](#-installation-guide)
 - [Security & Privacy](#-security--privacy)
 - [License](#-license)
 
@@ -105,7 +106,45 @@ Flick follows a strict separation of concerns, utilizing Tauri's split-process a
    npm run tauri build
    ```
 
-## 🔒 Security & Privacy
+## � Installation Guide
+
+### Windows
+
+1. Download the latest `.msi` or `.exe` installer from the Releases page.
+2. Run the installer and follow the prompts.
+3. If Windows shows a SmartScreen warning, click **More info** and then **Run anyway**.
+4. After install, launch Flick from the Start menu or system tray.
+5. Open Settings and add your API key.
+
+### macOS
+
+1. Download the latest `.dmg` file from the Releases page.
+2. Open the `.dmg` and drag Flick into the Applications folder.
+3. If macOS blocks the app because it is from an unidentified developer, open **System Settings → Privacy & Security** and allow it.
+4. You may also need to right-click the app once and select **Open** the first time.
+5. Launch Flick and grant any required accessibility or keyboard permissions if prompted.
+6. Open Settings and add your API key.
+
+> macOS can be a bit stricter about permissions, so the first launch is often the only tricky step.
+
+### Linux
+
+1. Download the appropriate package for your distro:
+   - `.deb` for Debian/Ubuntu-based systems
+   - `.AppImage` for most other distributions
+2. For `.deb` packages, install it with:
+   ```bash
+   sudo apt install ./flick_*.deb
+   ```
+3. For `.AppImage`, make it executable and run it:
+   ```bash
+   chmod +x Flick.AppImage
+   ./Flick.AppImage
+   ```
+4. If your desktop environment blocks the app, allow it to run from the file manager or terminal.
+5. Launch Flick and add your API key in Settings.
+
+## �🔒 Security & Privacy
 
 We take privacy seriously. Flick is designed to be as secure as possible:
 
