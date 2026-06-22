@@ -1,0 +1,54 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nickelchen/tauri-v2-schema/main/schema.json",
+  "productName": "Flick",
+  "identifier": "com.flick.app",
+  "version": "1.0.0",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "settings",
+        "title": "Flick — Settings",
+        "width": 560,
+        "height": 640,
+        "resizable": false,
+        "visible": false,
+        "center": true,
+        "decorations": false,
+        "transparent": false
+      },
+      {
+        "label": "toast",
+        "title": "",
+        "url": "/",
+        "width": 260,
+        "height": 48,
+        "resizable": false,
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false
+      }
+    ],
+    "trayIcon": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": true,
+      "id": "flick-tray"
+    },
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src ipc: http://ipc.localhost https://generativelanguage.googleapis.com"
+    }
+  },
+  "plugins": {
+    "autostart": {
+      "args": []
+    }
+  }
+}
