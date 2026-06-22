@@ -1,80 +1,107 @@
-# Flick ⚡️
+<div align="center">
+  <img src="src-tauri/icons/128x128@2x.png" alt="Flick Logo" width="128" height="128" />
+  <h1>Flick</h1>
+  <p><strong>System-wide AI text transformation at your fingertips.</strong></p>
 
-> AI-powered text transformation anywhere you type.
+  <p>
+    <a href="https://github.com/rixabhh/flick/actions"><img src="https://img.shields.io/github/actions/workflow/status/rixabhh/flick/release.yml?style=flat-square" alt="Build Status"></a>
+    <a href="https://v2.tauri.app/"><img src="https://img.shields.io/badge/Tauri-v2-24C8DB?style=flat-square&logo=tauri" alt="Tauri v2"></a>
+    <a href="https://svelte.dev/"><img src="https://img.shields.io/badge/Svelte-UI-FF3E00?style=flat-square&logo=svelte" alt="Svelte UI"></a>
+    <a href="https://choosealicense.com/licenses/mit/"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
+  </p>
+</div>
 
-Flick is a cross-platform desktop utility that brings the power of AI directly to your cursor. Simply type a trigger command (like `!translate` or `!casual`) followed by your text, and Flick instantly rewrites it right where you're typing — in any app, text editor, or browser.
+<br />
 
-![Flick App Icon](src-tauri/icons/128x128.png)
+Flick is a cross-platform desktop utility that brings the power of LLMs directly to your cursor. Simply type a command prefix (e.g., `!translate` or `!casual`) followed by your text anywhere on your computer, and Flick instantly rewrites it in-place. 
+
+No context switching, no copy-pasting—just native text replacement powered by Google's Gemini Flash.
+
+## 📋 Table of Contents
+
+- [Features](#-features)
+- [How It Works](#-how-it-works)
+- [Available Commands](#-available-commands)
+- [Architecture](#-architecture)
+- [Getting Started](#-getting-started)
+- [Security & Privacy](#-security--privacy)
+- [License](#-license)
 
 ## ✨ Features
 
-- **Global Text Transformation:** Works everywhere. Any app, any text field.
-- **In-place Magic:** Replaces your text as you type, without opening new windows or context menus.
-- **Custom Commands:** Create your own triggers like `!code`, `!summarize`, or `!professional`.
-- **Bring Your Own Key:** Powered by Google's Gemini Flash model for lightning-fast responses. Securely uses your own API key.
-- **Privacy First:** Only reads the buffer of what you're actively typing.
+- **Global Integration:** Works seamlessly across any application, text editor, or browser.
+- **In-place Execution:** Replaces text natively at the cursor position without opening external windows.
+- **Customizable Pipelines:** Define custom triggers (e.g., `!summarize`, `!professional`) tailored to your workflow.
+- **BYOK (Bring Your Own Key):** Connect directly to the Gemini Flash API using your personal API key.
+- **Lightweight Footprint:** Built on Tauri v2 and Rust for minimal memory usage and lightning-fast execution.
 
 ## 🚀 How It Works
 
-1. Start typing anywhere.
-2. Type a command starting with `!` (e.g., `!translate to spanish`).
-3. Flick detects the trigger, captures your text, and sends it to the AI.
-4. Your text is magically replaced with the AI's response.
+Flick runs silently in your system tray, monitoring keyboard input via an efficient, low-level OS hook. 
 
-### Built-in Commands
+1. **Type a trigger:** Start typing anywhere, prefixing your text with a command (e.g., `!casual`).
+2. **Detection:** Flick captures the buffer and detects the trigger once you stop typing.
+3. **Processing:** The text is routed through your OS clipboard, sent to the Gemini API, and instantly pasted back to your active cursor position.
 
-- `!translate [language]` - Translates your text to the specified language.
-- `!grammar` - Fixes spelling and grammatical errors.
-- `!casual` - Rewrites your text to sound more casual and friendly.
-- `!professional` - Elevates your tone for business communication.
-- `!summarize` - Condenses long paragraphs into concise summaries.
-- `!expand` - Expands brief notes into full sentences.
+## ⚡ Available Commands
 
-## 🛠️ Tech Stack
+### Built-in 
+| Command | Description |
+|---|---|
+| `!translate [lang]` | Translates the preceding text into the specified language. |
+| `!grammar` | Corrects spelling and grammatical errors. |
 
-Flick is built for performance and native integration across Windows, macOS, and Linux:
+### Custom Triggers (Configurable)
+You can easily add new commands in the Settings panel:
+- `!casual` - Rewrites text to sound more casual.
+- `!professional` - Elevates the tone for business communication.
+- `!summarize` - Condenses long paragraphs.
 
-- **Core Engine:** [Rust](https://www.rust-lang.org/)
-- **Desktop Framework:** [Tauri v2](https://v2.tauri.app/)
-- **Frontend UI:** [Svelte](https://svelte.dev/) + [Vite](https://vitejs.dev/)
-- **AI Integration:** [Google Gemini API](https://ai.google.dev/) (Flash model)
+## 🏗️ Architecture
 
-## 📦 Installation
+Flick follows a strict separation of concerns, utilizing Tauri's split-process architecture:
 
-*(Pre-built binaries for Windows, macOS, and Linux will be available in the Releases section soon!)*
+- **Core Engine (Rust):** Handles the global event hook (`rdev`), input buffering, trigger detection, OS keychain integration, and the clipboard manipulation pipeline.
+- **Frontend (Svelte + Vite):** A responsive, fluid settings dashboard and floating toast indicators built with modern web technologies.
 
-### Building from Source
+## 🛠️ Getting Started
 
-**Prerequisites:**
-- [Node.js](https://nodejs.org/) (v20+)
-- [Rust](https://rustup.rs/) (v1.75+)
-- [Tauri dependencies](https://v2.tauri.app/start/prerequisites/) for your OS (e.g., MSVC Build Tools on Windows).
+### Prerequisites
 
-**Steps:**
-1. Clone the repository:
+- [Node.js](https://nodejs.org/) (v20 or higher)
+- [Rust toolchain](https://rustup.rs/) (v1.75 or higher)
+- [Tauri v2 OS dependencies](https://v2.tauri.app/start/prerequisites/)
+
+### Build & Run
+
+1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/flick.git
+   git clone https://github.com/rixabhh/flick.git
    cd flick
    ```
-2. Install frontend dependencies:
+
+2. **Install frontend dependencies**
    ```bash
    npm install
    ```
-3. Run the application in development mode:
+
+3. **Run in development mode**
    ```bash
    npm run tauri dev
    ```
-4. Build the release binary:
+
+4. **Build release binaries**
    ```bash
    npm run tauri build
    ```
 
 ## 🔒 Security & Privacy
 
-Flick is designed with privacy in mind.
-- **Local Keystroke Processing:** Keystrokes are buffered locally in memory and never written to disk. The buffer is automatically cleared on mouse clicks, Enter, or navigation keys.
-- **API Key Security:** Your Gemini API key is encrypted and stored securely using your operating system's native keychain (Credential Manager on Windows, Keychain on macOS, Secret Service on Linux).
-- **Direct API Calls:** Network requests are made directly from your machine to the Google Gemini API. There is no middleman server.
+We take privacy seriously. Flick is designed to be as secure as possible:
+
+- **Local Memory Buffer:** Keystrokes are temporarily held in an ephemeral memory buffer that is strictly bounded in size. The buffer is immediately cleared upon mouse clicks, Enter, or navigation keys.
+- **Secure Key Storage:** API keys are encrypted and stored using your operating system's native secure credential manager (Windows Credential Manager, macOS Keychain, or Linux Secret Service).
+- **Direct API Communication:** Flick communicates exclusively and directly with the Google Gemini API. There are no telemetry, analytics, or middleman servers.
 
 ## 📄 License
 
