@@ -16,6 +16,8 @@ use crate::ai_client;
 pub async fn execute_replacement(
     app: &AppHandle,
     api_key: &str,
+    provider: &str,
+    model: &str,
     command: &str,
     param: Option<&str>,
     trigger: &str,
@@ -77,7 +79,7 @@ pub async fn execute_replacement(
         }
     };
 
-    let transformed = match ai_client::transform_text(api_key, &prompt).await {
+    let transformed = match ai_client::transform_text(api_key, provider, model, &prompt).await {
         Ok(text) => text,
         Err(e) => {
             // Per §8.3: If API call fails, restore clipboard and show error toast
@@ -119,6 +121,8 @@ pub async fn execute_replacement(
 pub async fn execute_custom_replacement(
     app: &AppHandle,
     api_key: &str,
+    provider: &str,
+    model: &str,
     prompt_template: &str,
     trigger: &str,
     show_done_toast: bool,
@@ -166,7 +170,7 @@ pub async fn execute_custom_replacement(
     // Step 6-7: Substitute {{text}} in prompt template and call API
     let prompt = prompt_template.replace("{{text}}", &clean_text);
 
-    let transformed = match ai_client::transform_text(api_key, &prompt).await {
+    let transformed = match ai_client::transform_text(api_key, provider, model, &prompt).await {
         Ok(text) => text,
         Err(e) => {
             let _ = app.emit("flick://error", serde_json::json!({"message": format!("API error: {}", e)}));

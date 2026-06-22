@@ -1,6 +1,8 @@
 <script>
   import { invoke } from "@tauri-apps/api/core";
 
+  let { provider = "gemini", model = "gemini-2.5-flash-lite" } = $props();
+
   let apiKey = $state("");
   let masked = $state(true);
   let testing = $state(false);
@@ -45,7 +47,11 @@
     testing = true;
     testResult = null;
     try {
-      await invoke("test_api_connection", { key: apiKey.trim() });
+      await invoke("test_api_connection", {
+        key: apiKey.trim(),
+        provider,
+        model,
+      });
       testResult = "success";
       testMessage = "Connection successful!";
     } catch (e) {
@@ -137,7 +143,7 @@
     </div>
   {/if}
 
-  <a class="api-link" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">
+  <a class="api-link" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
       <polyline points="15 3 21 3 21 9"/>

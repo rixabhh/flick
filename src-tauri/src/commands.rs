@@ -5,22 +5,26 @@
 use crate::{ai_client, config, keychain};
 use tauri::{AppHandle, Manager};
 
-/// Save the Gemini API key to the OS keychain.
+/// Save the configured API key to the OS keychain.
 #[tauri::command]
 pub async fn save_api_key(key: String) -> Result<(), String> {
     keychain::save_api_key(&key).map_err(|e| e.to_string())
 }
 
-/// Load the Gemini API key from the OS keychain.
+/// Load the configured API key from the OS keychain.
 #[tauri::command]
 pub async fn load_api_key() -> Result<String, String> {
     keychain::load_api_key().map_err(|e| e.to_string())
 }
 
-/// Test the Gemini API connection with the provided key.
+/// Test the selected provider/model connection with the provided key.
 #[tauri::command]
-pub async fn test_api_connection(key: String) -> Result<(), String> {
-    ai_client::test_connection(&key)
+pub async fn test_api_connection(
+    key: String,
+    provider: String,
+    model: String,
+) -> Result<(), String> {
+    ai_client::test_connection(&key, &provider, &model)
         .await
         .map_err(|e| e.to_string())
 }

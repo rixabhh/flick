@@ -172,11 +172,18 @@ fn run_hook_loop(app: AppHandle) {
                         }
                     };
 
-                    // Get config for show_done_toast
-                    let show_done_toast = app
+                    // Get config values needed for runtime behavior
+                    let (show_done_toast, provider, model) = app
                         .try_state::<AppState>()
-                        .map(|s| s.config.lock().unwrap().show_done_toast)
-                        .unwrap_or(true);
+                        .map(|s| {
+                            let cfg = s.config.lock().unwrap();
+                            (
+                                cfg.show_done_toast,
+                                cfg.provider.clone(),
+                                cfg.model.clone(),
+                            )
+                        })
+                        .unwrap_or((true, "gemini".to_string(), "gemini-2.5-flash-lite".to_string()));
 
                     let app_clone = app.clone();
                     let trigger_clone = trigger_match.clone();
@@ -208,6 +215,8 @@ fn run_hook_loop(app: AppHandle) {
                                 if let Err(e) = replacer::execute_custom_replacement(
                                     &app_clone,
                                     &api_key,
+                                    &provider,
+                                    &model,
                                     &template,
                                     &trigger_clone.full_trigger,
                                     show_done_toast,
@@ -226,6 +235,8 @@ fn run_hook_loop(app: AppHandle) {
                             if let Err(e) = replacer::execute_replacement(
                                 &app_clone,
                                 &api_key,
+                                &provider,
+                                &model,
                                 &trigger_clone.command,
                                 trigger_clone.param.as_deref(),
                                 &trigger_clone.full_trigger,

@@ -1,6 +1,6 @@
 // Flick - ai_client.rs
-// Per PRD §10.1: Gemini Flash API client.
-// Model: gemini-2.0-flash, temperature 0.3, maxOutputTokens 2048.
+// Per PRD §10.1: AI API client.
+// Default provider is Gemini with the free lite model.
 // 10-second timeout per §8.3.
 
 use anyhow::{bail, Context, Result};
@@ -8,9 +8,10 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use std::time::Duration;
 
-const GEMINI_ENDPOINT: &str =
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+const GEMINI_BASE_URL: &str =
+    "https://generativelanguage.googleapis.com/v1beta/models";
+const OPENROUTER_BASE_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
 
 /// Built-in prompt templates - per PRD §9.
 /// Returns the full prompt with {{text}} substituted.
@@ -34,65 +35,131 @@ pub fn get_prompt(command: &str, param: Option<&str>, text: &str) -> Option<Stri
     Some(template.replace("{{text}}", text))
 }
 
-/// Send a text transformation request to the Gemini Flash API.
-pub async fn transform_text(api_key: &str, prompt: &str) -> Result<String> {
+/// Send a text transformation request using the selected provider/model.
+pub async fn transform_text(
+    api_key: &str,
+    provider: &str,
+    model: &str,
+    prompt: &str,
+) -> Result<String> {
     let client = Client::builder()
         .timeout(REQUEST_TIMEOUT)
         .build()
         .context("Failed to build HTTP client")?;
 
-    let url = format!("{}?key={}", GEMINI_ENDPOINT, api_key);
+    match provider {
+        "openrouter" => {
+            let response = client
+                .post(OPENROUTER_BASE_URL)
+                .header("Authorization", format!("Bearer {}", api_key))
+                .header("HTTP-Referer", "https://github.com/rixabhh/flick")
+                .header("X-Title", "Flick")
+                .json(&json!({
+                    "model": model,
+                    "messages": [{
+                        "role": "user",
+                        "content": prompt
+                    }],
+                    "temperature": 0.3
+                }))
+                .send()
+                .await
+                .context("OpenRouter API request failed")?;
 
-    let body = json!({
-        "contents": [{
-            "parts": [{
-                "text": prompt
-            }]
-        }],
-        "generationConfig": {
-            "temperature": 0.3,
-            "maxOutputTokens": 2048
+            if !response.status().is_success() {
+                let status = response.status();
+                let body_text = response.text().await.unwrap_or_default();
+                bail!("OpenRouter API returned {}: {}", status, body_text);
+            }
+
+            let response_json: Value = response
+                .json()
+                .await
+                .context("Failed to parse OpenRouter response JSON")?;
+
+            let text = response_json
+                .get("choices")
+                .and_then(|c| c.get(0))
+                .and_then(|c| c.get("message"))
+                .and_then(|m| m.get("content"))
+                .and_then(|v| v.as_str())
+                .or_else(|| {
+                    response_json
+                        .get("choices")
+                        .and_then(|c| c.get(0))
+                        .and_then(|c| c.get("message"))
+                        .and_then(|m| m.get("content"))
+                        .and_then(|v| v.as_array())
+                        .and_then(|arr| arr.get(0))
+                        .and_then(|v| v.as_str())
+                })
+                .context("Unexpected OpenRouter response structure")?;
+
+            Ok(text.trim().to_string())
         }
-    });
+        _ => {
+            let url = format!(
+                "{}/{}:generateContent?key={}",
+                GEMINI_BASE_URL,
+                model,
+                api_key
+            );
 
-    let response = client
-        .post(&url)
-        .json(&body)
-        .send()
-        .await
-        .context("Gemini API request failed")?;
+            let body = json!({
+                "contents": [{
+                    "parts": [{
+                        "text": prompt
+                    }]
+                }],
+                "generationConfig": {
+                    "temperature": 0.3,
+                    "maxOutputTokens": 2048
+                }
+            });
 
-    if !response.status().is_success() {
-        let status = response.status();
-        let body_text = response.text().await.unwrap_or_default();
-        bail!("Gemini API returned {}: {}", status, body_text);
+            let response = client
+                .post(&url)
+                .json(&body)
+                .send()
+                .await
+                .context("Gemini API request failed")?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let body_text = response.text().await.unwrap_or_default();
+                bail!("Gemini API returned {}: {}", status, body_text);
+            }
+
+            let response_json: Value = response
+                .json()
+                .await
+                .context("Failed to parse Gemini response JSON")?;
+
+            let text = response_json
+                .get("candidates")
+                .and_then(|c| c.get(0))
+                .and_then(|c| c.get("content"))
+                .and_then(|c| c.get("parts"))
+                .and_then(|p| p.get(0))
+                .and_then(|p| p.get("text"))
+                .and_then(|t| t.as_str())
+                .context("Unexpected Gemini response structure")?;
+
+            Ok(text.trim().to_string())
+        }
     }
-
-    let response_json: Value = response
-        .json()
-        .await
-        .context("Failed to parse Gemini response JSON")?;
-
-    // Extract text from response - per §10.1
-    let text = response_json
-        .get("candidates")
-        .and_then(|c| c.get(0))
-        .and_then(|c| c.get("content"))
-        .and_then(|c| c.get("parts"))
-        .and_then(|p| p.get(0))
-        .and_then(|p| p.get("text"))
-        .and_then(|t| t.as_str())
-        .context("Unexpected Gemini response structure")?;
-
-    Ok(text.trim().to_string())
 }
 
 /// Test the API connection with a minimal request.
-pub async fn test_connection(api_key: &str) -> Result<()> {
+pub async fn test_connection(
+    api_key: &str,
+    provider: &str,
+    model: &str,
+) -> Result<()> {
     let prompt = "Reply with exactly: OK";
-    let result = transform_text(api_key, prompt).await?;
+    let result = transform_text(api_key, provider, model, prompt).await?;
     if result.is_empty() {
-        bail!("Gemini returned empty response");
+        bail!("Selected provider returned empty response");
     }
     Ok(())
 }

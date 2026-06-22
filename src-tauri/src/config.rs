@@ -22,6 +22,8 @@ pub struct FlickConfig {
     pub enabled: bool,
     pub launch_at_login: bool,
     pub show_done_toast: bool,
+    pub provider: String,
+    pub model: String,
     pub custom_commands: Vec<CustomCommand>,
 }
 
@@ -31,6 +33,8 @@ impl Default for FlickConfig {
             enabled: true,
             launch_at_login: false,
             show_done_toast: true,
+            provider: "gemini".to_string(),
+            model: "gemini-2.5-flash-lite".to_string(),
             custom_commands: Vec::new(),
         }
     }
@@ -90,6 +94,8 @@ mod tests {
         assert!(config.enabled);
         assert!(!config.launch_at_login);
         assert!(config.show_done_toast);
+        assert_eq!(config.provider, "gemini");
+        assert_eq!(config.model, "gemini-2.5-flash-lite");
         assert!(config.custom_commands.is_empty());
     }
 
@@ -99,6 +105,8 @@ mod tests {
             enabled: true,
             launch_at_login: true,
             show_done_toast: false,
+            provider: "openrouter".to_string(),
+            model: "openai/gpt-4o-mini".to_string(),
             custom_commands: vec![
                 CustomCommand {
                     trigger: "summarize".to_string(),
