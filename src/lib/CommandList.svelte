@@ -133,15 +133,15 @@
         {#if editingIndex === i}
           <div class="edit-form animate-fade-in">
             <div class="edit-row">
-              <label class="edit-label">Trigger</label>
+              <label class="edit-label" for="edit-trigger-{i}">Trigger</label>
               <div class="trigger-input-row">
                 <span class="trigger-prefix mono">!</span>
-                <input type="text" bind:value={editTrigger} placeholder="command name" class="mono" />
+                <input id="edit-trigger-{i}" type="text" bind:value={editTrigger} placeholder="command name" class="mono" />
               </div>
             </div>
             <div class="edit-row">
-              <label class="edit-label">Prompt template</label>
-              <textarea bind:value={editPrompt} rows="3" placeholder="Use {{text}} for the input text"></textarea>
+              <label class="edit-label" for="edit-prompt-{i}">Prompt template</label>
+              <textarea id="edit-prompt-{i}" bind:value={editPrompt} rows="3" placeholder="Use {{text}} for the input text"></textarea>
             </div>
             <div class="edit-actions">
               <button class="btn btn-primary btn-sm" onclick={() => saveEdit(i)}>Save</button>
@@ -174,15 +174,15 @@
     {#if showAddForm}
       <div class="edit-form new-form animate-slide-up">
         <div class="edit-row">
-          <label class="edit-label">Trigger</label>
+          <label class="edit-label" for="new-trigger">Trigger</label>
           <div class="trigger-input-row">
             <span class="trigger-prefix mono">!</span>
-            <input type="text" bind:value={newTrigger} placeholder="e.g. summarize" class="mono" />
+            <input id="new-trigger" type="text" bind:value={newTrigger} placeholder="e.g. summarize" class="mono" />
           </div>
         </div>
         <div class="edit-row">
-          <label class="edit-label">Prompt template</label>
-          <textarea bind:value={newPrompt} rows="3" placeholder="Summarize the following text: {{text}}"></textarea>
+          <label class="edit-label" for="new-prompt">Prompt template</label>
+          <textarea id="new-prompt" bind:value={newPrompt} rows="3" placeholder="Summarize the following text: {{text}}"></textarea>
         </div>
         <div class="edit-actions">
           <button class="btn btn-primary btn-sm" onclick={addCommand} disabled={!newTrigger.trim()}>

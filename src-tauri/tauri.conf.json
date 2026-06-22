@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nickelchen/tauri-v2-schema/main/schema.json",
   "productName": "Flick",
-  "identifier": "com.flick.app",
+  "identifier": "com.flick.desktop",
   "version": "1.0.0",
   "build": {
     "beforeDevCommand": "npm run dev",
