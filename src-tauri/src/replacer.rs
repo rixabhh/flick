@@ -133,13 +133,13 @@ pub async fn execute_replacement(
     Ok(())
 }
 
-/// Execute replacement with a custom prompt template.
+/// Execute replacement with a custom instruction prompt.
 pub async fn execute_custom_replacement(
     app: &AppHandle,
     api_key: &str,
     provider: &str,
     model: &str,
-    prompt_template: &str,
+    system_prompt: &str,
     trigger: &str,
     show_done_toast: bool,
 ) -> Result<()> {
@@ -186,8 +186,8 @@ pub async fn execute_custom_replacement(
     // Step 5: Emit transforming
     let _ = app.emit("flick://transforming", ());
 
-    // Step 6-7: Substitute {{text}} in prompt template and call API
-    let prompt = prompt_template.replace("{{text}}", &clean_text);
+    // Step 6-7: Build the custom prompt and call API.
+    let prompt = ai_client::get_custom_prompt(system_prompt, &clean_text);
 
     let transformed = match ai_client::transform_text(api_key, provider, model, &prompt).await {
         Ok(text) => text,

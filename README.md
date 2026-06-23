@@ -34,6 +34,7 @@ No context switching, no copy-pasting — just native text replacement powered b
 - **Provider Selection:** Choose between Gemini and OpenRouter from the settings panel.
 - **Model Control:** Select a Gemini model or enter an OpenRouter model manually.
 - **Customizable Pipelines:** Define custom triggers (e.g., `!summarize`, `!professional`) tailored to your workflow.
+- **Hindi + Hinglish Aware:** Built-in and custom prompts preserve Hindi, Hinglish, and code-mixed writing unless you explicitly translate.
 - **BYOK (Bring Your Own Key):** Connect directly to your chosen provider using your personal API key.
 - **Secure Key Storage:** API keys are stored in your OS keychain/credential manager.
 - **Lightweight Footprint:** Built on Tauri v2 and Rust for minimal memory usage and lightning-fast execution.
@@ -66,7 +67,7 @@ Flick comes with 9 powerful built-in commands designed to handle the most common
 ### Build Your Own (Custom Triggers)
 Need something specific to your workflow? You can easily create custom triggers in the Settings panel:
 - Define a trigger (e.g., `!code`, `!tweet`, `!docs`)
-- Write a prompt template using the `{{text}}` variable (e.g., `"Turn this into a snarky tweet: {{text}}"`)
+- Write a system prompt describing what the command should do (e.g., `"Turn this into a concise product update"`). Existing `{{text}}` templates are still supported.
 
 ## 🏗️ Architecture
 

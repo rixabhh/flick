@@ -50,9 +50,9 @@
     if (BUILTIN_TRIGGER_NAMES.has(trigger)) {
       return `!${trigger} is already a built-in command.`;
     }
-    if (!prompt) return "Add a prompt template.";
-    if (!prompt.includes("{{text}}")) {
-      return "Prompt template must include {{text}}.";
+    if (!prompt) return "Add a system prompt.";
+    if (prompt.length > 2000) {
+      return "System prompt must be 2000 characters or fewer.";
     }
     const duplicateIndex = customCommands.findIndex((cmd) => cmd.trigger === trigger);
     if (duplicateIndex !== -1 && duplicateIndex !== currentIndex) {
@@ -65,7 +65,7 @@
     clearMessage();
     showAddForm = true;
     newTrigger = "";
-    newPrompt = "Improve the following text: {{text}}";
+    newPrompt = "Rewrite the text with better clarity while keeping the same language and meaning.";
     editingIndex = -1;
   }
 
@@ -203,8 +203,8 @@
               </div>
             </div>
             <div class="edit-row">
-              <label class="edit-label" for="edit-prompt-{i}">Prompt template</label>
-              <textarea id="edit-prompt-{i}" bind:value={editPrompt} rows="3" placeholder="Use {{text}} for the input text"></textarea>
+              <label class="edit-label" for="edit-prompt-{i}">System prompt</label>
+              <textarea id="edit-prompt-{i}" bind:value={editPrompt} rows="4" placeholder="Tell Flick what this command should do"></textarea>
             </div>
             <div class="edit-actions">
               <button class="btn btn-primary btn-sm" onclick={() => saveEdit(i)}>Save</button>
@@ -214,7 +214,7 @@
         {:else}
           <div class="command-row custom-row">
             <span class="command-trigger mono badge badge-accent">!{cmd.trigger}</span>
-            <span class="command-desc mono prompt-preview">{cmd.prompt}</span>
+            <span class="command-desc prompt-preview">{cmd.prompt}</span>
             <div class="command-actions">
               <button class="btn btn-ghost btn-sm" onclick={() => startEdit(i)} title="Edit">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -244,8 +244,8 @@
           </div>
         </div>
         <div class="edit-row">
-          <label class="edit-label" for="new-prompt">Prompt template</label>
-          <textarea id="new-prompt" bind:value={newPrompt} rows="3" placeholder="Summarize the following text: {{text}}"></textarea>
+          <label class="edit-label" for="new-prompt">System prompt</label>
+          <textarea id="new-prompt" bind:value={newPrompt} rows="4" placeholder="Example: Summarize the text into three crisp bullets"></textarea>
         </div>
         <div class="edit-actions">
           <button class="btn btn-primary btn-sm" onclick={addCommand} disabled={!newTrigger.trim()}>

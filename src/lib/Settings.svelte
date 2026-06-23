@@ -1,10 +1,12 @@
 <script>
   import { invoke } from "@tauri-apps/api/core";
+  import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
   import ApiKeyInput from "./ApiKeyInput.svelte";
   import CommandList from "./CommandList.svelte";
+  import logoUrl from "../assets/flick-logo.png";
 
   let config = $state({
     enabled: true,
@@ -38,6 +40,16 @@
           ...config,
           ...cfg,
         };
+      }
+
+      try {
+        const autostartEnabled = await isEnabled();
+        if (autostartEnabled !== config.launch_at_login) {
+          config.launch_at_login = autostartEnabled;
+          await invoke("save_config", { config });
+        }
+      } catch (autostartError) {
+        console.error("Failed to read launch-at-login state:", autostartError);
       }
     } catch (e) {
       console.error("Failed to load config:", e);
@@ -81,7 +93,20 @@
 
   async function toggleLaunchAtLogin() {
     const newVal = !config.launch_at_login;
-    await updateConfig("launch_at_login", newVal);
+    const previousVal = config.launch_at_login;
+    config.launch_at_login = newVal;
+
+    try {
+      if (newVal) {
+        await enable();
+      } else {
+        await disable();
+      }
+      await invoke("save_config", { config });
+    } catch (e) {
+      config.launch_at_login = previousVal;
+      console.error("Failed to update launch at login:", e);
+    }
   }
 
   async function toggleShowDoneToast() {
@@ -115,11 +140,7 @@
     <div class="title-bar-content">
       <div class="app-brand">
         <span class="app-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none">
-            <path d="M7 19V5h10" />
-            <path d="M7 12h8" />
-            <path d="M16 5l-9 14" />
-          </svg>
+          <img src={logoUrl} alt="" />
         </span>
         <span class="app-name">Flick</span>
       </div>
@@ -226,7 +247,7 @@
           <h2 class="section-title">Commands</h2>
         </div>
         <p class="section-desc">
-          Type any trigger at the end of your text to transform it instantly. Custom commands let you define your own prompts.
+          Type any trigger at the end of your text to transform it instantly. Custom commands let you define your own instruction prompts.
         </p>
         <CommandList
           bind:customCommands={config.custom_commands}
@@ -296,11 +317,7 @@
         <div class="about-content">
           <div class="about-hero">
             <span class="about-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M7 19V5h10" />
-                <path d="M7 12h8" />
-                <path d="M16 5l-9 14" />
-              </svg>
+              <img src={logoUrl} alt="" />
             </span>
             <h2 class="about-name">Flick</h2>
             <span class="about-tagline">Type. Trigger. Done.</span>
@@ -378,15 +395,13 @@
     color: var(--text-primary);
     font-size: 0.76rem;
     font-weight: 700;
+    overflow: hidden;
   }
 
-  .app-icon svg {
-    width: 15px;
-    height: 15px;
-    stroke: currentColor;
-    stroke-width: 2.2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
+  .app-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 
   .app-name {
@@ -527,15 +542,13 @@
     color: var(--text-primary);
     font-size: 1.4rem;
     font-weight: 800;
+    overflow: hidden;
   }
 
-  .about-icon svg {
-    width: 30px;
-    height: 30px;
-    stroke: currentColor;
-    stroke-width: 1.9;
-    stroke-linecap: round;
-    stroke-linejoin: round;
+  .about-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 
   .about-name {

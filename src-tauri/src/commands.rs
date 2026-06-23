@@ -53,8 +53,11 @@ fn validate_custom_command(
     if BUILTIN_TRIGGERS.contains(&trigger) {
         return Err(format!("!{} is already a built-in command.", trigger));
     }
-    if !prompt.contains("{{text}}") {
-        return Err("Prompt template must include {{text}}.".to_string());
+    if prompt.trim().is_empty() {
+        return Err("System prompt is required.".to_string());
+    }
+    if prompt.len() > 2000 {
+        return Err("System prompt must be 2000 characters or fewer.".to_string());
     }
     if let Some((i, _)) = cfg
         .custom_commands

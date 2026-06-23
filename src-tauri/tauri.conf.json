@@ -37,8 +37,8 @@
         "label": "toast",
         "title": "",
         "url": "/",
-        "width": 440,
-        "height": 64,
+        "width": 190,
+        "height": 46,
         "resizable": false,
         "visible": false,
         "decorations": false,
@@ -50,7 +50,7 @@
     ],
     "trayIcon": {
       "iconPath": "icons/icon.png",
-      "iconAsTemplate": true,
+      "iconAsTemplate": false,
       "id": "flick-tray"
     },
     "security": {

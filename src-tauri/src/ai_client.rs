@@ -13,6 +13,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_OUTPUT_TOKENS: u32 = 1024;
 const GEMINI_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta/models";
 const OPENROUTER_BASE_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
+const LANGUAGE_POLICY: &str = "Language handling: detect whether the input is English, Hindi, Hinglish, or another language. Unless the task explicitly asks for translation, preserve the same language, script, and natural code-mixed style. For Hinglish, keep the Hindi-English mix natural instead of forcing pure English. Preserve names, URLs, code, numbers, emojis, and intentional formatting where possible. Return only the transformed text.";
 
 static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
     Client::builder()
@@ -53,27 +54,46 @@ fn first_text_from_openrouter_content(content: &Value) -> Option<&str> {
     })
 }
 
-/// Built-in prompt templates - per PRD §9.
-/// Returns the full prompt with {{text}} substituted.
+/// Built-in prompt instructions - per PRD §9.
+/// Returns a complete, language-aware prompt for the selected command.
 pub fn get_prompt(command: &str, param: Option<&str>, text: &str) -> Option<String> {
-    let template = match command {
-        "fix" => "Fix all grammar, spelling, and punctuation errors in the following text. Return only the corrected text, no explanation: {{text}}".to_string(),
-        "formal" => "Rewrite the following text in a formal, professional tone. Return only the rewritten text: {{text}}".to_string(),
-        "casual" => "Rewrite the following text in a casual, friendly, conversational tone. Return only the rewritten text: {{text}}".to_string(),
-        "shorter" => "Make the following text shorter and more concise while keeping the core meaning. Return only the shortened text: {{text}}".to_string(),
-        "longer" => "Expand the following text with more detail and context. Return only the expanded text: {{text}}".to_string(),
-        "improve" => "Improve the following text for clarity, flow, grammar, and readability while preserving the original meaning and tone. Return only the improved text: {{text}}".to_string(),
-        "rephrase" => "Rephrase the following text in a different way while keeping the same meaning. Return only the rephrased text: {{text}}".to_string(),
-        "bullet" => "Convert the following text into a clear, well-structured bullet point list. Return only the bullet points: {{text}}".to_string(),
-        "explain" => "Rewrite the following text in simple, easy-to-understand language. Return only the simplified text: {{text}}".to_string(),
+    let task = match command {
+        "fix" => "Fix grammar, spelling, punctuation, and awkward phrasing without changing the user's meaning or language style.".to_string(),
+        "formal" => "Rewrite in a formal, professional tone while preserving the user's original language or Hinglish/Hindi style.".to_string(),
+        "casual" => "Rewrite in a casual, friendly, conversational tone while preserving the user's original language or Hinglish/Hindi style.".to_string(),
+        "shorter" => "Make the text shorter and more concise while keeping the core meaning and original language style.".to_string(),
+        "longer" => "Expand the text with useful detail and context while keeping the same meaning and original language style.".to_string(),
+        "improve" => "Improve clarity, flow, grammar, and readability while preserving the original meaning, tone, and language style.".to_string(),
+        "rephrase" => "Rephrase the text in a different way while keeping the same meaning and original language style.".to_string(),
+        "bullet" => "Convert the text into a clear, well-structured bullet point list while preserving the original language style.".to_string(),
+        "explain" => "Rewrite the text in simple, easy-to-understand language while preserving the original language or Hinglish/Hindi style.".to_string(),
         "translate" => {
             let lang = param.unwrap_or("English");
-            format!("Translate the following text to {}. Return only the translated text, nothing else: {{{{text}}}}", lang)
+            format!("Translate the text to {}. Keep names, URLs, code, numbers, and formatting intact where possible.", lang)
         },
         _ => return None,
     };
 
-    Some(template.replace("{{text}}", text))
+    Some(build_instruction_prompt(&task, text))
+}
+
+fn build_instruction_prompt(task: &str, text: &str) -> String {
+    format!("{LANGUAGE_POLICY}\n\nTask: {task}\n\nText:\n{text}")
+}
+
+/// Build a custom command prompt. Existing {{text}} templates still work, while
+/// new commands can be plain instructions describing what the command should do.
+pub fn get_custom_prompt(system_prompt: &str, text: &str) -> String {
+    let instruction = system_prompt.trim();
+
+    if instruction.contains("{{text}}") {
+        return format!(
+            "{LANGUAGE_POLICY}\n\nTask:\n{}",
+            instruction.replace("{{text}}", text)
+        );
+    }
+
+    build_instruction_prompt(instruction, text)
 }
 
 /// Send a text transformation request using the selected provider/model.
@@ -195,7 +215,8 @@ mod tests {
     fn test_get_prompt_fix() {
         let prompt = get_prompt("fix", None, "hello wrold").unwrap();
         assert!(prompt.contains("hello wrold"));
-        assert!(prompt.contains("Fix all grammar"));
+        assert!(prompt.contains("Fix grammar"));
+        assert!(prompt.contains("Hinglish"));
     }
 
     #[test]
@@ -208,6 +229,20 @@ mod tests {
     #[test]
     fn test_get_prompt_unknown() {
         assert!(get_prompt("unknown_command", None, "text").is_none());
+    }
+
+    #[test]
+    fn test_get_custom_prompt_without_template() {
+        let prompt = get_custom_prompt("Make this witty.", "plain text");
+        assert!(prompt.contains("Make this witty."));
+        assert!(prompt.contains("plain text"));
+        assert!(prompt.contains("Hinglish"));
+    }
+
+    #[test]
+    fn test_get_custom_prompt_with_legacy_template() {
+        let prompt = get_custom_prompt("Summarize: {{text}}", "long text");
+        assert!(prompt.contains("Summarize: long text"));
     }
 
     #[test]
