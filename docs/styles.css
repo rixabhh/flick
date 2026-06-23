@@ -566,6 +566,18 @@ h2 {
   color: #050505;
 }
 
+.product-hunt-badge {
+  margin-top: 2rem;
+  display: flex;
+  justify-content: center;
+}
+
+.product-hunt-badge img {
+  display: block;
+  width: 250px;
+  height: 54px;
+}
+
 .site-footer {
   justify-content: space-between;
   min-height: 108px;
