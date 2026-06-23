@@ -4,6 +4,7 @@
   <p><strong>System-wide AI text transformation at your fingertips.</strong></p>
 
   <p>
+    <a href="https://rixabhh.github.io/flick/"><img src="https://img.shields.io/badge/Website-Live-f5f5f5?style=flat-square" alt="Website"></a>
     <a href="https://v2.tauri.app/"><img src="https://img.shields.io/badge/Tauri-v2-24C8DB?style=flat-square&logo=tauri" alt="Tauri v2"></a>
     <a href="https://svelte.dev/"><img src="https://img.shields.io/badge/Svelte-UI-FF3E00?style=flat-square&logo=svelte" alt="Svelte UI"></a>
     <a href="https://choosealicense.com/licenses/mit/"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
@@ -14,10 +15,13 @@
 
 Flick is a cross-platform desktop utility that brings AI text transformation directly to your cursor. Simply type a trigger command (for example `!translate` or `!casual`) followed by your text anywhere on your computer, and Flick instantly rewrites it in-place.
 
+Visit the live website: **[rixabhh.github.io/flick](https://rixabhh.github.io/flick/)**
+
 No context switching, no copy-pasting — just native text replacement powered by your selected provider and model.
 
 ## 📋 Table of Contents
 
+- [Website](#-website)
 - [Features](#-features)
 - [How It Works](#-how-it-works)
 - [Available Commands](#-available-commands)
@@ -26,6 +30,12 @@ No context switching, no copy-pasting — just native text replacement powered b
 - [Installation Guide](#-installation-guide)
 - [Security & Privacy](#-security--privacy)
 - [License](#-license)
+
+## Website
+
+Explore the polished landing page, commands, privacy notes, and download links at:
+
+**[https://rixabhh.github.io/flick/](https://rixabhh.github.io/flick/)**
 
 ## ✨ Features
 
