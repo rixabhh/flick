@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Flick is an AI-powered desktop text transformation utility for rewriting, fixing, translating, and customizing text anywhere you type."
+    />
+    <meta property="og:title" content="Flick - Type. Trigger. Done." />
+    <meta
+      property="og:description"
+      content="AI-powered desktop text transformation anywhere you type. Built with Rust, Tauri, and Svelte."
+    />
+    <meta property="og:type" content="website" />
+    <meta name="theme-color" content="#050505" />
+    <title>Flick - Type. Trigger. Done.</title>
+    <link rel="icon" type="image/png" href="./assets/flick-logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header" data-reveal>
+        <a class="brand" href="#top" aria-label="Flick home">
+          <img src="./assets/flick-logo.png" alt="" />
+          <span>Flick</span>
+        </a>
+        <nav class="nav-links" aria-label="Primary navigation">
+          <a href="#commands">Commands</a>
+          <a href="#privacy">Privacy</a>
+          <a href="#download">Download</a>
+        </nav>
+        <a class="header-action" href="https://github.com/rixabhh/flick">GitHub</a>
+      </header>
+
+      <main id="top">
+        <section class="hero">
+          <div class="hero-copy" data-reveal>
+            <p class="eyebrow">AI text transformation for desktop</p>
+            <h1>Flick</h1>
+            <p class="tagline">Type. Trigger. Done.</p>
+            <p class="hero-text">
+              Rewrite, fix, translate, and customize text anywhere you type.
+              Flick stays out of your way until a trigger turns rough words into
+              finished writing.
+            </p>
+            <div class="hero-actions">
+              <a class="button primary" href="https://github.com/rixabhh/flick/releases/latest">
+                Download latest
+              </a>
+              <a class="button secondary" href="https://github.com/rixabhh/flick">
+                View source
+              </a>
+            </div>
+          </div>
+
+          <div class="hero-visual" data-reveal>
+            <div class="desktop-window" aria-label="Flick text transformation preview">
+              <div class="window-chrome">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <div class="editor-preview">
+                <p class="muted-line">Message</p>
+                <div class="text-line active">
+                  this needs to sound sharper for launch<span class="trigger">!improve</span>
+                </div>
+                <div class="transform-chip">
+                  <span class="spinner"></span>
+                  <span>Transforming</span>
+                </div>
+                <div class="text-line result">
+                  Let’s make this launch message sharper, clearer, and ready to send.
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="metrics" aria-label="Flick highlights" data-reveal>
+          <div>
+            <strong>10</strong>
+            <span>built-in commands</span>
+          </div>
+          <div>
+            <strong>2</strong>
+            <span>AI providers</span>
+          </div>
+          <div>
+            <strong>0</strong>
+            <span>app switching</span>
+          </div>
+        </section>
+
+        <section class="section-grid">
+          <div class="section-copy" data-reveal>
+            <p class="eyebrow">Workflow</p>
+            <h2>Designed for the moment before you press send.</h2>
+            <p>
+              Flick works from your system tray and replaces text directly in
+              the app you are already using. Emails, notes, docs, chats, issue
+              comments, or code-adjacent writing all stay in flow.
+            </p>
+          </div>
+          <div class="steps" data-reveal>
+            <div class="step">
+              <span>01</span>
+              <p>Type your draft anywhere.</p>
+            </div>
+            <div class="step">
+              <span>02</span>
+              <p>Add a trigger like <code>!fix</code>, <code>!casual</code>, or <code>!translate:hindi</code>.</p>
+            </div>
+            <div class="step">
+              <span>03</span>
+              <p>Flick transforms the text in-place and restores your clipboard.</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="commands" class="commands-section">
+          <div class="section-heading" data-reveal>
+            <p class="eyebrow">Commands</p>
+            <h2>Small triggers. Big cleanup.</h2>
+            <p>
+              Built-in commands cover everyday writing, while custom commands
+              let you define your own prompt-backed workflows.
+            </p>
+          </div>
+
+          <div class="command-grid" data-reveal>
+            <article><code>!fix</code><span>Grammar, spelling, punctuation, and awkward phrasing.</span></article>
+            <article><code>!formal</code><span>Professional, polished writing for work.</span></article>
+            <article><code>!casual</code><span>Natural, friendly phrasing for everyday messages.</span></article>
+            <article><code>!shorter</code><span>Condense long text without losing the point.</span></article>
+            <article><code>!longer</code><span>Expand short ideas with useful context.</span></article>
+            <article><code>!improve</code><span>Improve clarity, flow, grammar, and readability.</span></article>
+            <article><code>!rephrase</code><span>Same meaning, cleaner wording.</span></article>
+            <article><code>!bullet</code><span>Turn messy notes into scannable bullets.</span></article>
+            <article><code>!explain</code><span>Simplify complex text into plain language.</span></article>
+            <article><code>!translate:&lt;lang&gt;</code><span>Translate into another language on demand.</span></article>
+          </div>
+        </section>
+
+        <section class="feature-band">
+          <div data-reveal>
+            <p class="eyebrow">Custom triggers</p>
+            <h2>Your own writing operations.</h2>
+          </div>
+          <div class="prompt-card" data-reveal>
+            <div class="prompt-row">
+              <span>Trigger</span>
+              <code>!reply</code>
+            </div>
+            <div class="prompt-row">
+              <span>System prompt</span>
+              <p>Write a concise, confident reply that keeps the same language and intent.</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="privacy" class="section-grid">
+          <div class="section-copy" data-reveal>
+            <p class="eyebrow">Private by design</p>
+            <h2>Bring your own key. Keep control.</h2>
+            <p>
+              Flick connects directly to your selected provider. API keys stay
+              in your operating system keychain, and there is no extra Flick
+              backend sitting between you and your model.
+            </p>
+          </div>
+          <div class="privacy-list" data-reveal>
+            <div><span>BYOK</span><p>Use your own Gemini or OpenRouter key.</p></div>
+            <div><span>Keychain</span><p>Secrets are stored with native OS credential storage.</p></div>
+            <div><span>Local utility</span><p>Built as a lightweight Rust and Tauri desktop app.</p></div>
+          </div>
+        </section>
+
+        <section class="providers" data-reveal>
+          <p class="eyebrow">Provider support</p>
+          <div class="provider-row">
+            <span>Gemini</span>
+            <span>OpenRouter</span>
+            <span>Custom model selection</span>
+            <span>Hindi + Hinglish aware</span>
+          </div>
+        </section>
+
+        <section id="download" class="download-panel" data-reveal>
+          <img src="./assets/flick-logo.png" alt="" />
+          <p class="eyebrow">Flick 1.0.0</p>
+          <h2>Bring AI rewriting to every text box on your desktop.</h2>
+          <div class="hero-actions">
+            <a class="button primary" href="https://github.com/rixabhh/flick/releases/latest">
+              Download latest
+            </a>
+            <a class="button secondary" href="https://github.com/rixabhh/flick#readme">
+              Read the docs
+            </a>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <span>Flick</span>
+        <a href="https://github.com/rixabhh/flick">GitHub</a>
+      </footer>
+    </div>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
