@@ -330,8 +330,10 @@ pub async fn set_active_local_model(app: AppHandle, id: String) -> Result<(), St
 }
 
 #[tauri::command]
-pub async fn download_local_model(app: AppHandle, id: String) -> Result<(), String> {
-    let state = app.state::<ModelDownloadState>();
+pub fn download_local_model(app: AppHandle, id: String) -> Result<(), String> {
+    let state = app
+        .try_state::<ModelDownloadState>()
+        .ok_or_else(|| "Model downloader is still starting. Please try again.".to_string())?;
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
     {
         let mut active = state
@@ -343,18 +345,36 @@ pub async fn download_local_model(app: AppHandle, id: String) -> Result<(), Stri
         }
         active.insert(id.clone(), Arc::clone(&cancel));
     }
-    let result = download_model_with_cancel(&app, &id, &cancel)
-        .await
-        .map_err(|error| error.to_string());
-    if let Ok(mut active) = state.active.lock() {
-        active.remove(&id);
-    }
-    result
+    let _ = app.emit(
+        "flick://model-download",
+        serde_json::json!({ "id": id.clone(), "state": "started" }),
+    );
+    // Downloads can last minutes and may fail for reasons outside Flick's
+    // control. Run them outside the IPC request so a network or native-library
+    // failure cannot close the settings webview or leave its buttons stuck.
+    tauri::async_runtime::spawn(async move {
+        let result = download_model_with_cancel(&app, &id, &cancel).await;
+        if let Some(active) = app.try_state::<ModelDownloadState>() {
+            if let Ok(mut downloads) = active.active.lock() {
+                downloads.remove(&id);
+            }
+        }
+        let payload = match result {
+            Ok(()) => serde_json::json!({ "id": id, "state": "complete" }),
+            Err(error) => {
+                serde_json::json!({ "id": id, "state": "failed", "message": error.to_string() })
+            }
+        };
+        let _ = app.emit("flick://model-download", payload);
+    });
+    Ok(())
 }
 
 #[tauri::command]
 pub fn cancel_local_model_download(app: AppHandle, id: String) -> Result<(), String> {
-    let state = app.state::<ModelDownloadState>();
+    let state = app
+        .try_state::<ModelDownloadState>()
+        .ok_or_else(|| "Model downloader is not available.".to_string())?;
     let active = state
         .active
         .lock()

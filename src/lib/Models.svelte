@@ -17,9 +17,8 @@
   }
   async function download(id) {
     downloading = id; error = "";
-    try { await invoke("download_local_model", { id }); await refresh(); }
-    catch (message) { error = `Download didn't finish. Your existing model is safe. ${String(message)}`; }
-    finally { downloading = ""; }
+    try { await invoke("download_local_model", { id }); }
+    catch (message) { downloading = ""; error = `Download didn't start. Your existing model is safe. ${String(message)}`; }
   }
   async function remove(id) {
     error = "";
@@ -42,8 +41,21 @@
   onMount(() => {
     refresh();
     let unlisten;
-    listen("flick://model-download", ({ payload }) => progress[payload.id] = payload)
-      .then((dispose) => unlisten = dispose);
+    listen("flick://model-download", ({ payload }) => {
+      if (!payload?.id) return;
+      if (payload.state === "complete") {
+        downloading = "";
+        delete progress[payload.id];
+        void refresh();
+        return;
+      }
+      if (payload.state === "failed") {
+        downloading = "";
+        error = `Download didn't finish. Your existing model is safe. ${payload.message || "Please try again."}`;
+        return;
+      }
+      if (payload.received !== undefined) progress[payload.id] = payload;
+    }).then((dispose) => unlisten = dispose);
     return () => unlisten?.();
   });
 </script>
