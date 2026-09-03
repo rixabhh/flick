@@ -3,61 +3,226 @@
   import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
   import ApiKeyInput from "./ApiKeyInput.svelte";
   import CommandList from "./CommandList.svelte";
+  import Models from "./Models.svelte";
+  import History from "./History.svelte";
+  import { formatCorrections, parseCorrections } from "./dictation-settings.js";
+  import { supportedLanguages, translate } from "./i18n.js";
   import logoUrl from "../assets/flick-logo.png";
 
   let config = $state({
     enabled: true,
     launch_at_login: false,
     show_done_toast: true,
+    theme: "system",
+    app_language: "en",
+    onboarding_complete: false,
     provider: "gemini",
     model: "gemini-2.5-flash-lite",
+    custom_base_url: "",
     custom_commands: [],
+    composer_shortcut: "Ctrl+Shift+Space",
+    copy_last_result_shortcut: "Ctrl+Alt+C",
+    paste_plain_text_shortcut: "Ctrl+Alt+V",
+    dictation_shortcut: "Ctrl+Space",
+    dictation_mode: "hold-or-toggle",
+    dictation_device_id: "",
+    dictation_model_id: "whisper-tiny-en",
+    dictation_language: "en",
+    dictation_translate_to_english: false,
+    dictation_filler_cleanup: true,
+    dictation_llm_post_process: false,
+    dictation_corrections: [],
+    append_trailing_space: false,
+    history_enabled: true,
+    retain_recordings: false,
+    recording_retention_count: 20,
+    history_limit: 100,
+    local_models: [],
+    disabled_apps: [],
+    auto_submit_apps: [],
   });
 
-  let activeTab = $state("api");
-  let version = $state("1.0.0");
+  let activeTab = $state("home");
+  let version = $state("2.0.0-beta");
+  let inputDevices = $state([]);
+  let inputLevel = $state(0);
+  let dictationRuntime = $state(null);
+  let diagnosticsPath = $state("");
+  let keyRemovalMessage = $state("");
+  let recordingDeletionMessage = $state("");
+  let templatePath = $state("");
+  let templateMessage = $state("");
 
   const tabs = [
-    { id: "api", label: "API Key", icon: "key" },
-    { id: "commands", label: "Commands", icon: "terminal" },
-    { id: "behavior", label: "Behavior", icon: "sliders" },
-    { id: "about", label: "About", icon: "info" },
+    { id: "home", labelKey: "tab.home", icon: "info" },
+    { id: "write", labelKey: "tab.write", icon: "key" },
+    { id: "commands", labelKey: "tab.commands", icon: "terminal" },
+    { id: "dictate", labelKey: "tab.dictate", icon: "sliders" },
+    { id: "models", labelKey: "tab.models", icon: "terminal" },
+    { id: "history", labelKey: "tab.history", icon: "info" },
+    { id: "privacy", labelKey: "tab.privacy", icon: "info" },
+    { id: "advanced", labelKey: "tab.advanced", icon: "sliders" },
   ];
+
+  const t = (key) => translate(config.app_language, key);
+
+  function selectTab(index) {
+    activeTab = tabs[index].id;
+  }
+
+  function handleTabKeydown(event, index) {
+    let next = index;
+    if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+    else if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = tabs.length - 1;
+    else return;
+    event.preventDefault();
+    selectTab(next);
+    document.getElementById(`settings-tab-${tabs[next].id}`)?.focus();
+  }
 
   const defaultModels = {
     gemini: "gemini-2.5-flash-lite",
     openrouter: "openrouter/free",
+    custom: "",
   };
 
-  onMount(async () => {
+  async function refreshInputDevices() {
     try {
-      const cfg = await invoke("get_config");
-      if (cfg) {
-        config = {
-          ...config,
-          ...cfg,
-        };
-      }
-
-      try {
-        const autostartEnabled = await isEnabled();
-        if (autostartEnabled !== config.launch_at_login) {
-          config.launch_at_login = autostartEnabled;
-          await invoke("save_config", { config });
-        }
-      } catch (autostartError) {
-        console.error("Failed to read launch-at-login state:", autostartError);
-      }
-    } catch (e) {
-      console.error("Failed to load config:", e);
+      inputDevices = await invoke("list_input_devices");
+    } catch (error) {
+      console.error("Failed to list microphones:", error);
+      inputDevices = [];
     }
+  }
+
+  async function refreshInputLevel() {
+    try {
+      inputLevel = await invoke("preview_input_level");
+    } catch (error) {
+      console.error("Failed to test microphone level:", error);
+      inputLevel = 0;
+    }
+  }
+
+  async function refreshDictationRuntime() {
+    try { dictationRuntime = await invoke("dictation_runtime_info"); }
+    catch (error) { console.error("Failed to read dictation runtime:", error); }
+  }
+
+  function saveCorrections(value) {
+    updateConfig("dictation_corrections", parseCorrections(value));
+  }
+
+  async function exportDiagnostics() {
+    try { diagnosticsPath = await invoke("export_diagnostics"); }
+    catch (error) { console.error("Failed to export diagnostics:", error); }
+  }
+
+  async function exportTemplates() {
+    try {
+      templatePath = await invoke("export_command_templates");
+      templateMessage = "Templates exported. Keep this file private if its prompts are sensitive.";
+    } catch (error) {
+      templateMessage = `Could not export templates: ${error}`;
+    }
+  }
+
+  async function importTemplates() {
+    if (!templatePath.trim()) {
+      templateMessage = "Enter the full path to a Flick template JSON file.";
+      return;
+    }
+    try {
+      const added = await invoke("import_command_templates", { path: templatePath.trim() });
+      const cfg = await invoke("get_config");
+      config = { ...config, ...cfg };
+      templateMessage = added ? `Imported ${added} template${added === 1 ? "" : "s"}.` : "No new templates to import.";
+    } catch (error) {
+      templateMessage = `Could not import templates: ${error}`;
+    }
+  }
+
+  async function removeApiKey() {
+    if (!confirm("Remove the stored API key from your operating system keychain?")) return;
+    try { await invoke("delete_api_key", { provider: config.provider }); keyRemovalMessage = "Stored API key removed."; }
+    catch (error) { keyRemovalMessage = `Could not remove key: ${error}`; }
+  }
+
+  async function removeRecordings() {
+    if (!confirm("Delete all locally retained Flick recording files? This cannot be undone.")) return;
+    try { await invoke("clear_retained_recordings"); recordingDeletionMessage = "Retained recording files deleted."; }
+    catch (error) { recordingDeletionMessage = `Could not delete recordings: ${error}`; }
+  }
+
+  function applyTheme(theme) {
+    const resolved = theme === "system"
+      ? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
+      : theme;
+    document.documentElement.dataset.theme = resolved;
+  }
+
+  function applyLanguage(language) {
+    document.documentElement.lang = supportedLanguages.some((item) => item.id === language) ? language : "en";
+  }
+
+  async function completeOnboarding() {
+    await updateConfig("onboarding_complete", true);
+  }
+
+  onMount(() => {
+    // onMount only honours a synchronous cleanup return. Keep the async setup
+    // inside a detached function so repeated settings-window mounts cannot
+    // leave duplicate event listeners behind.
+    let disposed = false;
+    let unlisten = () => {};
+    void (async () => {
+      const disposeHistoryListener = await listen("flick://open-history", () => activeTab = "history");
+      if (disposed) {
+        disposeHistoryListener();
+        return;
+      }
+      unlisten = disposeHistoryListener;
+      try {
+        const cfg = await invoke("get_config");
+        if (cfg) {
+          config = {
+            ...config,
+            ...cfg,
+          };
+        }
+        applyTheme(config.theme);
+        applyLanguage(config.app_language);
+        refreshDictationRuntime();
+
+        try {
+          const autostartEnabled = await isEnabled();
+          if (autostartEnabled !== config.launch_at_login) {
+            config.launch_at_login = autostartEnabled;
+            await invoke("save_config", { config });
+          }
+        } catch (autostartError) {
+          console.error("Failed to read launch-at-login state:", autostartError);
+        }
+      } catch (e) {
+        console.error("Failed to load config:", e);
+      }
+    })();
+    return () => {
+      disposed = true;
+      unlisten();
+    };
   });
 
   async function updateConfig(field, value) {
     config[field] = value;
+    if (field === "theme") applyTheme(value);
+    if (field === "app_language") applyLanguage(value);
     try {
       await invoke("save_config", { config });
     } catch (e) {
@@ -73,6 +238,7 @@
     if (config.provider === "openrouter" && currentModel.startsWith("gemini-")) {
       config.model = defaultModels.openrouter;
     }
+    if (config.provider === "custom" && !currentModel) config.model = "local-model";
 
     try {
       await invoke("save_config", { config });
@@ -154,12 +320,17 @@
   </div>
 
   <!-- Tab Navigation -->
-  <nav class="tab-nav">
-    {#each tabs as tab}
+  <div class="tab-nav" role="tablist" aria-label="Flick settings sections">
+    {#each tabs as tab, index}
       <button
+        id={`settings-tab-${tab.id}`}
+        role="tab"
+        aria-selected={activeTab === tab.id}
+        aria-controls="settings-tabpanel"
         class="tab-btn"
         class:active={activeTab === tab.id}
-        onclick={() => activeTab = tab.id}
+        onclick={() => selectTab(index)}
+        onkeydown={(event) => handleTabKeydown(event, index)}
       >
         {#if tab.icon === "key"}
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -189,14 +360,33 @@
             <line x1="12" y1="8" x2="12.01" y2="8"/>
           </svg>
         {/if}
-        <span>{tab.label}</span>
+        <span>{t(tab.labelKey)}</span>
       </button>
     {/each}
-  </nav>
+  </div>
 
   <!-- Tab Content -->
-  <div class="tab-content">
-    {#if activeTab === "api"}
+  <div id="settings-tabpanel" class="tab-content" role="tabpanel" aria-labelledby={`settings-tab-${activeTab}`} tabindex="-1">
+    {#if activeTab === "home"}
+      <div class="panel-section animate-fade-in">
+        <div class="section-header"><h2 class="section-title">{t("home.title")}</h2></div>
+        {#if !config.onboarding_complete}
+          <div class="panel quick-card setup-card">
+            <span class="badge badge-accent">{t("home.setup")}</span>
+            <strong>Get Flick ready in three private steps</strong>
+            <ol>
+              <li><button class="setup-link" onclick={() => activeTab = "write"}>Choose an AI provider</button> for writing and reply drafts.</li>
+              <li><button class="setup-link" onclick={() => activeTab = "models"}>Download a verified local speech model</button> for offline dictation.</li>
+              <li><button class="setup-link" onclick={() => { activeTab = "dictate"; refreshInputDevices(); }}>Choose a microphone</button>; your operating system may ask for permission the first time you record.</li>
+            </ol>
+            <button class="btn btn-primary btn-sm" onclick={completeOnboarding}>I’ll finish this later</button>
+          </div>
+        {/if}
+        <p class="section-desc">Flick is ready for text commands and AI replies. Select a message anywhere, then press <span class="mono">{config.composer_shortcut}</span> to draft a reply.</p>
+        <div class="panel quick-card"><span class="badge badge-accent">Reply composer</span><strong>Selected-text context only</strong><span class="text-secondary">Nothing is read from the screen or saved as conversation history.</span></div>
+        <div class="panel quick-card"><span class="badge badge-muted">Offline dictation</span><strong>Local speech setup</strong><span class="text-secondary">Shortcut: <span class="mono">{config.dictation_shortcut}</span> · mode: {config.dictation_mode}</span></div>
+      </div>
+    {:else if activeTab === "write"}
       <div class="panel-section animate-fade-in">
         <div class="section-header">
           <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -214,6 +404,7 @@
             <select bind:value={config.provider} onchange={handleProviderChange}>
               <option value="gemini">Gemini</option>
               <option value="openrouter">OpenRouter</option>
+              <option value="custom">OpenAI-compatible / local</option>
             </select>
           </label>
           <label>
@@ -234,7 +425,11 @@
             {/if}
           </label>
         </div>
-        <ApiKeyInput provider={config.provider} model={config.model} />
+        {#if config.provider === "custom"}
+          <label class="custom-url"><span>Base URL</span><input type="text" bind:value={config.custom_base_url} onblur={() => updateConfig("custom_base_url", config.custom_base_url)} placeholder="http://localhost:11434/v1" /></label>
+        {/if}
+        <ApiKeyInput provider={config.provider} model={config.model} customBaseUrl={config.custom_base_url} />
+        {#if config.provider === "custom"}<p class="section-desc">A key is optional for local endpoints. Leave it blank if your endpoint does not require authentication.</p>{/if}
       </div>
 
     {:else if activeTab === "commands"}
@@ -255,6 +450,54 @@
         />
       </div>
 
+    {:else if activeTab === "dictate"}
+      <div class="panel-section animate-fade-in">
+        <div class="section-header"><h2 class="section-title">Dictation</h2></div>
+        <p class="section-desc">Configure the local speech workflow. Audio and transcript handling remain on this device.</p>
+        <label class="setting-field"><span>Dictation shortcut</span><input type="text" bind:value={config.dictation_shortcut} onblur={() => updateConfig("dictation_shortcut", config.dictation_shortcut)} /></label>
+        <label class="setting-field"><span>Activation</span><select bind:value={config.dictation_mode} onchange={() => updateConfig("dictation_mode", config.dictation_mode)}><option value="hold-or-toggle">Hold or toggle</option><option value="push-to-talk">Push to talk</option><option value="toggle">Toggle</option></select></label>
+        <label class="setting-field"><span>Microphone</span><select bind:value={config.dictation_device_id} onchange={() => updateConfig("dictation_device_id", config.dictation_device_id)}><option value="">System default</option>{#each inputDevices as device}<option value={device.id}>{device.name}{device.is_default ? " (default)" : ""}</option>{/each}</select></label>
+        <label class="setting-field"><span>Spoken language</span><select bind:value={config.dictation_language} onchange={() => updateConfig("dictation_language", config.dictation_language)}><option value="en">English</option><option value="es">Spanish</option><option value="hi">Hindi</option><option value="fr">French</option><option value="de">German</option><option value="auto">Detect automatically</option></select></label>
+        <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Translate speech to English</span><span class="toggle-label-desc">Requires the multilingual model</span></div><label class="toggle"><input type="checkbox" checked={config.dictation_translate_to_english} onchange={() => updateConfig("dictation_translate_to_english", !config.dictation_translate_to_english)} /><span class="toggle-slider"></span></label></div>
+        <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Remove common filler words</span><span class="toggle-label-desc">Locally removes um, uh, erm, and ah from final text</span></div><label class="toggle"><input type="checkbox" checked={config.dictation_filler_cleanup} onchange={() => updateConfig("dictation_filler_cleanup", !config.dictation_filler_cleanup)} /><span class="toggle-slider"></span></label></div>
+        <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">AI cleanup after transcription</span><span class="toggle-label-desc">Off by default. Sends only the finished transcript to your configured provider; audio stays local.</span></div><label class="toggle"><input type="checkbox" checked={config.dictation_llm_post_process} onchange={() => updateConfig("dictation_llm_post_process", !config.dictation_llm_post_process)} /><span class="toggle-slider"></span></label></div>
+        <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Keep local recording files</span><span class="toggle-label-desc">Off by default. Saves a local WAV after dictation for review.</span></div><label class="toggle"><input type="checkbox" checked={config.retain_recordings} onchange={() => updateConfig("retain_recordings", !config.retain_recordings)} /><span class="toggle-slider"></span></label></div>
+        {#if config.retain_recordings}<label class="setting-field"><span>Recording retention</span><select bind:value={config.recording_retention_count} onchange={() => updateConfig("recording_retention_count", Number(config.recording_retention_count))}><option value={5}>5 recordings</option><option value={20}>20 recordings</option><option value={50}>50 recordings</option></select></label>{/if}
+        <label class="setting-field"><span>Personal corrections</span><textarea value={formatCorrections(config.dictation_corrections)} onblur={(event) => saveCorrections(event.currentTarget.value)} placeholder="Acme => ACME&#10;Jon => John"></textarea><small>One replacement per line: <span class="mono">find =&gt; replacement</span></small></label>
+        <div class="microphone-tools"><button class="btn btn-secondary" onclick={refreshInputDevices}>Refresh microphones</button><button class="btn btn-secondary" onclick={refreshInputLevel}>Test microphone</button><div class="input-level" aria-label="Measured microphone input level"><span style={`width: ${Math.min(100, inputLevel * 100)}%`}></span></div></div>
+        {#if dictationRuntime}<div class="panel quick-card"><strong>Local runtime: {dictationRuntime.acceleration}</strong><span class="text-secondary">{dictationRuntime.details}</span><button class="btn btn-secondary btn-sm" onclick={refreshDictationRuntime}>Refresh runtime</button></div>{/if}
+        <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Add trailing space</span><span class="toggle-label-desc">Add a space after a pasted transcript</span></div><label class="toggle"><input type="checkbox" checked={config.append_trailing_space} onchange={() => updateConfig("append_trailing_space", !config.append_trailing_space)} /><span class="toggle-slider"></span></label></div>
+        <label class="setting-field"><span>Auto-submit after dictation</span><input type="text" value={config.auto_submit_apps.join(", ")} onblur={(event) => updateConfig("auto_submit_apps", event.currentTarget.value.split(",").map((value) => value.trim()).filter(Boolean))} placeholder="Optional app names, comma-separated" /><small>Off by default. Flick presses Enter only after a successful paste into one of these apps.</small></label>
+        <div class="panel quick-card"><strong>Local models</strong><span class="text-secondary">Install a verified speech model from the Models section once the selected engine is available for this platform.</span></div>
+      </div>
+    {:else if activeTab === "models"}
+      <div class="panel-section animate-fade-in"><Models /></div>
+    {:else if activeTab === "history"}
+      <div class="panel-section animate-fade-in"><History /></div>
+    {:else if activeTab === "privacy"}
+      <div class="panel-section animate-fade-in">
+        <div class="section-header"><h2 class="section-title">{t("privacy.title")}</h2></div>
+        <div class="panel quick-card"><strong>Reply context is explicit</strong><span class="text-secondary">Flick uses only selected or manually supplied context. Drafts and context are not persisted.</span></div>
+        <div class="panel quick-card"><strong>Protected targets</strong><span class="text-secondary">Flick refuses actions in recognized dedicated credential-manager apps and honors your app exclusion list. On Windows, it also checks the focused control’s native password flag. It never reads password-field contents.</span></div>
+        <div class="panel quick-card"><strong>Provider credential</strong><span class="text-secondary">Your API key is kept in the operating system keychain, not Flick’s settings file.</span><button class="btn btn-secondary" onclick={removeApiKey}>Remove stored API key</button>{#if keyRemovalMessage}<small>{keyRemovalMessage}</small>{/if}</div>
+        <div class="panel quick-card"><strong>Retained recordings</strong><span class="text-secondary">Deletes only the opt-in local WAV files captured by Flick; transcript history is unaffected.</span><button class="btn btn-secondary" onclick={removeRecordings}>Delete retained recordings</button>{#if recordingDeletionMessage}<small>{recordingDeletionMessage}</small>{/if}</div>
+        <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Keep local activity history</span><span class="toggle-label-desc">Controls future transcript and action history.</span></div><label class="toggle"><input type="checkbox" checked={config.history_enabled} onchange={() => updateConfig("history_enabled", !config.history_enabled)} /><span class="toggle-slider"></span></label></div>
+        <label class="setting-field"><span>Unsaved history limit</span><select bind:value={config.history_limit} onchange={() => updateConfig("history_limit", Number(config.history_limit))}><option value={25}>25 items</option><option value={100}>100 items</option><option value={500}>500 items</option></select></label>
+        <label class="setting-field"><span>Apps to exclude</span><input type="text" value={config.disabled_apps.join(", ")} onblur={(event) => updateConfig("disabled_apps", event.currentTarget.value.split(",").map((value) => value.trim()).filter(Boolean))} placeholder="Comma-separated app names" /></label>
+      </div>
+    {:else if activeTab === "advanced"}
+      <div class="panel-section animate-fade-in">
+        <div class="section-header"><h2 class="section-title">Advanced</h2></div>
+        <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Enable Flick</span><span class="toggle-label-desc">Listen for commands and the reply shortcut</span></div><label class="toggle"><input type="checkbox" checked={config.enabled} onchange={toggleEnabled} /><span class="toggle-slider"></span></label></div>
+        <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Launch at login</span><span class="toggle-label-desc">Start Flick automatically when you sign in</span></div><label class="toggle"><input type="checkbox" checked={config.launch_at_login} onchange={toggleLaunchAtLogin} /><span class="toggle-slider"></span></label></div>
+        <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Show completion toast</span><span class="toggle-label-desc">Confirm successful transformations</span></div><label class="toggle"><input type="checkbox" checked={config.show_done_toast} onchange={toggleShowDoneToast} /><span class="toggle-slider"></span></label></div>
+        <label class="setting-field"><span>Copy last result shortcut</span><input type="text" bind:value={config.copy_last_result_shortcut} onblur={() => updateConfig("copy_last_result_shortcut", config.copy_last_result_shortcut)} /><small>Copies the newest optional local history entry. Default: Ctrl+Alt+C.</small></label>
+        <label class="setting-field"><span>Paste as plain text shortcut</span><input type="text" bind:value={config.paste_plain_text_shortcut} onblur={() => updateConfig("paste_plain_text_shortcut", config.paste_plain_text_shortcut)} /><small>Pastes the clipboard’s text representation without source formatting. Default: Ctrl+Alt+V.</small></label>
+        <label class="setting-field"><span>Theme</span><select bind:value={config.theme} onchange={() => updateConfig("theme", config.theme)}><option value="system">System</option><option value="dark">Dark</option><option value="light">Light</option></select></label>
+        <label class="setting-field"><span>{t("settings.language")}</span><select bind:value={config.app_language} onchange={() => updateConfig("app_language", config.app_language)}>{#each supportedLanguages as language}<option value={language.id}>{t(language.labelKey)}</option>{/each}</select><small>{t("language.note")}</small></label>
+        <div class="panel quick-card"><strong>Diagnostics</strong><span class="text-secondary">Creates a local support bundle without API keys, drafts, clipboard data, or transcript history.</span><button class="btn btn-secondary" onclick={exportDiagnostics}>Export diagnostics</button>{#if diagnosticsPath}<small class="mono">Saved: {diagnosticsPath}</small>{/if}</div>
+        <div class="panel quick-card"><strong>Command templates</strong><span class="text-secondary">Export or add validated custom command templates. API keys and history are never included.</span><button class="btn btn-secondary" onclick={exportTemplates}>Export templates</button><label class="setting-field"><span>Import JSON path</span><input type="text" bind:value={templatePath} placeholder="C:\\path\\to\\flick-command-templates.json" /></label><button class="btn btn-secondary" onclick={importTemplates}>Import templates</button>{#if templateMessage}<small>{templateMessage}</small>{/if}</div>
+      </div>
     {:else if activeTab === "behavior"}
       <div class="panel-section animate-fade-in">
         <div class="section-header">
@@ -500,6 +743,26 @@
     min-width: 0;
   }
 
+  .setting-field, .custom-url {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .setting-field > span, .custom-url > span {
+    color: var(--text-secondary);
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .quick-card {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: var(--space-lg);
+  }
+
   .provider-controls label > span {
     color: var(--text-secondary);
     font-size: 0.74rem;
@@ -512,6 +775,29 @@
     flex-direction: column;
     border-top: 1px solid var(--border);
     border-bottom: 1px solid var(--border);
+  }
+
+  .microphone-tools {
+    display: grid;
+    grid-template-columns: auto auto minmax(5rem, 1fr);
+    align-items: center;
+    gap: var(--space-sm);
+    margin: var(--space-sm) 0 var(--space-md);
+  }
+
+  .input-level {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--bg-elevated);
+    overflow: hidden;
+  }
+
+  .input-level span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+    transition: width 100ms linear;
   }
 
   /* ===== About ===== */
@@ -605,5 +891,30 @@
 
   .about-footer a:hover {
     color: var(--text-primary);
+  }
+
+  .setup-card {
+    gap: var(--space-sm);
+    border-color: var(--accent);
+  }
+
+  .setup-card ol {
+    margin: 0;
+    padding-left: 1.25rem;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    line-height: 1.65;
+  }
+
+  .setup-link {
+    appearance: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
   }
 </style>

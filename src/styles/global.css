@@ -52,6 +52,24 @@
   --shadow-glow: 0 0 0 3px var(--accent-glow);
 }
 
+:root[data-theme="light"] {
+  --bg-primary: #f6f7fa;
+  --bg-surface: #ffffff;
+  --bg-elevated: #eef1f6;
+  --accent: #356fd0;
+  --accent-dim: #2458ad;
+  --accent-glow: rgba(53, 111, 208, 0.14);
+  --accent-glow-strong: rgba(53, 111, 208, 0.22);
+  --text-primary: #171a21;
+  --text-secondary: #505968;
+  --text-muted: #7b8492;
+  --border: #d6dbe4;
+  --border-hover: #b7c0ce;
+  --shadow-sm: 0 1px 2px rgba(24, 31, 42, 0.08);
+  --shadow-md: 0 4px 12px rgba(24, 31, 42, 0.12);
+  --shadow-lg: 0 8px 24px rgba(24, 31, 42, 0.16);
+}
+
 /* ========== Reset ========== */
 *,
 *::before,
@@ -120,7 +138,7 @@ button {
 
 input[type="text"],
 input[type="password"] {
-  background: #0d0e10;
+  background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: var(--space-sm) var(--space-md);
@@ -144,7 +162,7 @@ input[type="password"]::placeholder {
 select {
   appearance: none;
   -webkit-appearance: none;
-  background-color: #0d0e10;
+  background-color: var(--bg-primary);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a2a9b5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-position: right 10px center;
   background-repeat: no-repeat;

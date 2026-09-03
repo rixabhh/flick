@@ -2,7 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { openUrl } from "@tauri-apps/plugin-opener";
 
-  let { provider = "gemini", model = "gemini-2.5-flash-lite" } = $props();
+  let { provider = "gemini", model = "gemini-2.5-flash-lite", customBaseUrl = "" } = $props();
 
   let apiKey = $state("");
   let masked = $state(true);
@@ -14,7 +14,7 @@
 
   async function loadExistingKey() {
     try {
-      const key = await invoke("load_api_key");
+      const key = await invoke("load_api_key", { provider });
       if (key) {
         apiKey = key;
         hasKey = true;
@@ -24,13 +24,18 @@
     }
   }
 
-  loadExistingKey();
+  $effect(() => {
+    provider;
+    apiKey = "";
+    hasKey = false;
+    loadExistingKey();
+  });
 
   async function saveKey() {
     if (!apiKey.trim()) return;
     saving = true;
     try {
-      await invoke("save_api_key", { key: apiKey.trim() });
+      await invoke("save_api_key", { key: apiKey.trim(), provider });
       hasKey = true;
       testResult = "success";
       testMessage = "API key saved";
@@ -44,7 +49,7 @@
   }
 
   async function testConnection() {
-    if (!apiKey.trim()) return;
+    if ((provider !== "custom" && !apiKey.trim()) || (provider === "custom" && !customBaseUrl.trim())) return;
     testing = true;
     testResult = null;
     try {
@@ -52,6 +57,7 @@
         key: apiKey.trim(),
         provider,
         model,
+        customBaseUrl,
       });
       testResult = "success";
       testMessage = "Connection successful!";
@@ -75,7 +81,9 @@
   }
 
   function providerName() {
-    return provider === "openrouter" ? "OpenRouter" : "Gemini";
+    if (provider === "openrouter") return "OpenRouter";
+    if (provider === "custom") return "OpenAI-compatible endpoint";
+    return "Gemini";
   }
 
   function keyPlaceholder() {
@@ -83,6 +91,7 @@
   }
 
   function keyLink() {
+    if (provider === "custom") return "";
     return provider === "openrouter"
       ? "https://openrouter.ai/settings/keys"
       : "https://aistudio.google.com/app/apikey";
@@ -143,7 +152,11 @@
         Save Key
       {/if}
     </button>
-    <button class="btn btn-secondary btn-sm" onclick={testConnection} disabled={testing || !apiKey.trim()}>
+    <button
+      class="btn btn-secondary btn-sm"
+      onclick={testConnection}
+      disabled={testing || (provider !== "custom" && !apiKey.trim()) || (provider === "custom" && !customBaseUrl.trim())}
+    >
       {#if testing}
         Testing…
       {:else}
@@ -167,14 +180,14 @@
     </div>
   {/if}
 
-  <a class="api-link" href={keyLink()} onclick={openKeyLink}>
+  {#if provider !== "custom"}<a class="api-link" href={keyLink()} onclick={openKeyLink}>
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
       <polyline points="15 3 21 3 21 9"/>
       <line x1="10" y1="14" x2="21" y2="3"/>
     </svg>
     Get a {providerName()} API key
-  </a>
+  </a>{/if}
 </div>
 
 <style>

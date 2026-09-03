@@ -42,7 +42,7 @@
     commandMessage = "";
   }
 
-  function validateCommand(trigger, prompt, currentIndex = -1) {
+  function validateCommand(trigger, prompt, currentId = null) {
     if (!trigger) return "Add a trigger name.";
     if (!/^[a-z][a-z0-9_-]{1,31}$/.test(trigger)) {
       return "Use 2-32 lowercase letters, numbers, dashes, or underscores.";
@@ -54,8 +54,8 @@
     if (prompt.length > 2000) {
       return "System prompt must be 2000 characters or fewer.";
     }
-    const duplicateIndex = customCommands.findIndex((cmd) => cmd.trigger === trigger);
-    if (duplicateIndex !== -1 && duplicateIndex !== currentIndex) {
+    const duplicate = customCommands.find((cmd) => cmd.trigger === trigger && cmd.id !== currentId);
+    if (duplicate) {
       return `!${trigger} already exists.`;
     }
     return "";
@@ -86,8 +86,8 @@
     }
 
     try {
-      await invoke("add_custom_command", { trigger, prompt });
-      customCommands = [...customCommands, { trigger, prompt }];
+      const command = await invoke("add_custom_command", { trigger, prompt });
+      customCommands = [...customCommands, command];
       onUpdate(customCommands);
       showMessage(`Added !${trigger}`, "success");
       showAddForm = false;
@@ -117,15 +117,16 @@
   async function saveEdit(index) {
     const trigger = normalizeTrigger(editTrigger);
     const prompt = editPrompt.trim();
-    const validationError = validateCommand(trigger, prompt, index);
+    const command = customCommands[index];
+    const validationError = validateCommand(trigger, prompt, command.id);
     if (validationError) {
       showMessage(validationError);
       return;
     }
 
     try {
-      await invoke("update_custom_command", { index, trigger, prompt });
-      customCommands[index] = { trigger, prompt };
+      await invoke("update_custom_command", { id: command.id, trigger, prompt });
+      customCommands[index] = { ...command, trigger, prompt };
       customCommands = [...customCommands];
       onUpdate(customCommands);
       cancelEdit();
@@ -137,7 +138,7 @@
 
   async function deleteCommand(index) {
     try {
-      await invoke("delete_custom_command", { index });
+      await invoke("delete_custom_command", { id: customCommands[index].id });
       customCommands = customCommands.filter((_, i) => i !== index);
       onUpdate(customCommands);
       if (editingIndex === index) cancelEdit();
