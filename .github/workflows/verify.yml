@@ -34,7 +34,10 @@ jobs:
           - os: macos-13
             target: x86_64-apple-darwin
             check_only: false
-          - os: macos-latest
+          # macos-latest currently resolves to the macOS 26 preview image, where
+          # the AppKit binding generator used by active-window detection crashes.
+          # macos-14 is the supported, stable Apple Silicon image.
+          - os: macos-14
             target: aarch64-apple-darwin
             check_only: false
           - os: ubuntu-22.04
@@ -46,14 +49,22 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - name: Install LLVM bindings on Windows
-        if: startsWith(matrix.os, 'windows')
+      - name: Install LLVM bindings on Windows x64
+        if: matrix.target == 'x86_64-pc-windows-msvc'
         shell: pwsh
         run: |
           choco install llvm -y --no-progress
           "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Install native LLVM bindings on Windows ARM64
+        if: matrix.target == 'aarch64-pc-windows-msvc'
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'LLVM-23.1.0-woa64.msi'
+          Invoke-WebRequest -Uri 'https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.0/LLVM-23.1.0-woa64.msi' -OutFile $installer
+          Start-Process msiexec.exe -ArgumentList @('/i', $installer, '/qn', '/norestart') -Wait -NoNewWindow
+          "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - if: matrix.os == 'ubuntu-22.04'
-        run: sudo apt-get update && sudo apt-get install -y clang libclang-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libxdo-dev libxtst-dev libxcb-ewmh-dev libxcb-randr0-dev libdbus-1-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y clang libclang-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libxdo-dev libxtst-dev libxcb-ewmh-dev libxcb-randr0-dev libdbus-1-dev libasound2-dev pkg-config
       - name: Install LLVM bindings on macOS
         if: startsWith(matrix.os, 'macos')
         run: |
