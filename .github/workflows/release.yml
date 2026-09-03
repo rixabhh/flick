@@ -117,6 +117,19 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Flick ${{ github.ref_name }}'
+          releaseBody: |
+            ## Install Flick
+
+            Choose the installer that matches your computer:
+
+            - **Windows x64**: Intel or AMD PCs (most Windows computers)
+            - **Windows arm64**: Snapdragon / Windows on ARM PCs
+            - **macOS Apple Silicon**: M-series Macs
+            - **macOS Intel**: Intel-based Macs
+            - **Linux x64**: Debian package for Intel/AMD Linux desktops
+
+            An x64 MSI cannot install on Windows ARM. If Windows shows a
+            processor-type message, download the asset labelled `arm64`.
           releaseDraft: true
           prerelease: true
           args: --target ${{ matrix.target }}
