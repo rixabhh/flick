@@ -64,6 +64,10 @@ jobs:
           Invoke-WebRequest -Uri 'https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.0/LLVM-23.1.0-woa64.msi' -OutFile $installer
           Start-Process msiexec.exe -ArgumentList @('/i', $installer, '/qn', '/norestart') -Wait -NoNewWindow
           "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          # whisper.cpp requires clang rather than MSVC for Windows ARM64.
+          "CC=clang-cl" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "CXX=clang-cl" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "CMAKE_GENERATOR=Ninja" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Install LLVM bindings on macOS
         if: startsWith(matrix.os, 'macos')

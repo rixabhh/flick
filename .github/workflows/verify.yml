@@ -70,6 +70,11 @@ jobs:
           Invoke-WebRequest -Uri 'https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.0/LLVM-23.1.0-woa64.msi' -OutFile $installer
           Start-Process msiexec.exe -ArgumentList @('/i', $installer, '/qn', '/norestart') -Wait -NoNewWindow
           "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          # whisper.cpp rejects MSVC for ARM builds. Use the LLVM compiler that
+          # matches this ARM64 runner instead of the Visual Studio generator.
+          "CC=clang-cl" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "CXX=clang-cl" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "CMAKE_GENERATOR=Ninja" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - if: matrix.os == 'ubuntu-22.04'
         run: sudo apt-get update && sudo apt-get install -y clang libclang-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libxdo-dev libxtst-dev libxcb-ewmh-dev libxcb-randr0-dev libdbus-1-dev libasound2-dev pkg-config
       - name: Install LLVM bindings on macOS
