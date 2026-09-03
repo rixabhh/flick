@@ -33,6 +33,10 @@ Flick is a local-first desktop writing assistant for Windows, macOS, and Linux. 
 
 The default reply shortcut is `Ctrl+Shift+Space` and dictation shortcut is `Ctrl+Space` on Windows/Linux; macOS uses `Cmd` in place of `Ctrl`.
 
+### Install the right build
+
+On the release page, choose the file that matches both your operating system and processor. Windows names are intentional: use **`x64`** for the vast majority of Intel/AMD PCs and **`arm64`** only for Windows on ARM devices such as Snapdragon PCs. An `x64` MSI cannot install on Windows ARM; download the matching `arm64` MSI (or `arm64-setup.exe`) instead. macOS builds are published separately for **Apple Silicon** and **Intel**.
+
 ## Your first day with Flick
 
 Flick is designed to stay invisible until you call it. You do not need to learn a new editor or move your work into a separate window.
@@ -153,7 +157,7 @@ FLICK_WHISPER_SAMPLE=/path/to/sample.wav
 cargo test --manifest-path src-tauri/Cargo.toml transcribes_real_whisper_audio -- --ignored
 ```
 
-CI verifies frontend, browser UI, and native targets across Windows x64/ARM64, macOS Intel/Apple Silicon, and Linux x64. Physical hardware, compositor, signing, and notarization checks remain release gates.
+CI verifies frontend, browser UI, and native targets across Windows x64/ARM64, macOS Intel/Apple Silicon, and Linux x64. GitHub-hosted macOS builds use current macOS 15 runners (`macos-15-intel` and `macos-15`) so Intel packaging does not depend on the retired macOS 13 image. Physical hardware, compositor, signing, and notarization checks remain release gates.
 
 ## Project structure
 

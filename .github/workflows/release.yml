@@ -33,11 +33,11 @@ jobs:
             target: x86_64-pc-windows-msvc
           - os: windows-11-arm
             target: aarch64-pc-windows-msvc
-          - os: macos-13
+          # macos-13 is retired. Keep an actual Intel package on the current
+          # supported GitHub-hosted runner.
+          - os: macos-15-intel
             target: x86_64-apple-darwin
-          # Keep Apple Silicon releases on the stable image; macos-latest is a
-          # preview image at present and crashes an upstream AppKit binding build.
-          - os: macos-14
+          - os: macos-15
             target: aarch64-apple-darwin
 
     runs-on: ${{ matrix.os }}

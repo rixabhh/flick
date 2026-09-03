@@ -36,6 +36,10 @@ pub struct ModelInfo {
     pub description: String,
     pub language: String,
     pub size_bytes: u64,
+    /// The binary is present but has not yet been verified by Flick. This is
+    /// deliberately separate from `installed`: opening Models must never read
+    /// gigabytes of data just to render a settings page.
+    pub available_locally: bool,
     pub installed: bool,
     pub active: bool,
 }
@@ -196,7 +200,27 @@ pub fn installed_model_path(app: &AppHandle) -> Option<PathBuf> {
 /// Return only a catalog model whose on-disk bytes still match the published
 /// digest. Dictation calls this immediately before native model loading.
 pub async fn verified_installed_model_path(app: &AppHandle) -> Result<Option<PathBuf>> {
-    let id = crate::config::load_config(app)?.dictation_model_id;
+    let config = crate::config::load_config(app)?;
+    let id = config.dictation_model_id;
+    if let Some(model) = CATALOG.iter().find(|model| model.id == id) {
+        let path = models_dir(app)?.join(model.file_name);
+        let is_recorded = config.local_models.iter().any(|saved| {
+            saved.id == model.id
+                && saved.file_name == model.file_name
+                && saved.size_bytes == model.size_bytes
+                && saved.sha256 == model.sha256
+                && saved.installed
+        });
+        // We checksum before recording a model and before an explicit model
+        // change. Subsequent dictations only make a fast metadata check.
+        if is_recorded
+            && path
+                .metadata()
+                .is_ok_and(|metadata| metadata.len() == model.size_bytes)
+        {
+            return Ok(Some(path));
+        }
+    }
     verified_model_path(app, &id).await
 }
 
@@ -218,26 +242,36 @@ pub fn model_is_english_only(id: &str) -> Result<bool> {
 
 #[tauri::command]
 pub async fn list_local_models(app: AppHandle) -> Result<Vec<ModelInfo>, String> {
-    let active_id = crate::config::load_config(&app)
-        .map_err(|error| error.to_string())?
-        .dictation_model_id;
+    let config = crate::config::load_config(&app).map_err(|error| error.to_string())?;
+    let active_id = config.dictation_model_id;
     let directory = models_dir(&app).map_err(|error| error.to_string())?;
     let mut models = Vec::with_capacity(CATALOG.len());
     for model in CATALOG {
         let path = directory.join(model.file_name);
-        // A file with the right name is not an installed model until its
-        // published digest verifies. This keeps an interrupted or manually
-        // replaced binary out of both the UI's installed count and selection.
-        let installed = path.is_file()
-            && verify_file(&path, model.sha256)
-                .await
-                .map_err(|error| error.to_string())?;
+        // Do not hash every installed model here. Large Whisper models are
+        // multiple gigabytes and doing that on every visit made the Models tab
+        // look frozen (and could exhaust a small machine's IO budget). A model
+        // becomes trusted only after download or an explicit Verify & use
+        // action; both paths run the full SHA-256 verification.
+        let available_locally = path
+            .metadata()
+            .map(|metadata| metadata.len() == model.size_bytes)
+            .unwrap_or(false);
+        let installed = available_locally
+            && config.local_models.iter().any(|saved| {
+                saved.id == model.id
+                    && saved.file_name == model.file_name
+                    && saved.size_bytes == model.size_bytes
+                    && saved.sha256 == model.sha256
+                    && saved.installed
+            });
         models.push(ModelInfo {
             id: model.id.to_string(),
             name: model.name.to_string(),
             description: model.description.to_string(),
             language: model.language.to_string(),
             size_bytes: model.size_bytes,
+            available_locally,
             installed,
             active: installed && active_id == model.id,
         });
@@ -262,6 +296,7 @@ pub async fn list_local_models(app: AppHandle) -> Result<Vec<ModelInfo>, String>
                     description: "User-provided local model. Flick never uploads it; compatibility is checked when it is loaded.".into(),
                     language: "User supplied".into(),
                     size_bytes: entry.metadata().map(|metadata| metadata.len()).unwrap_or(0),
+                    available_locally: true,
                     installed: true,
                     active: active_id == format!("custom:{name}"),
                 });
@@ -281,6 +316,9 @@ pub async fn set_active_local_model(app: AppHandle, id: String) -> Result<(), St
         return Err("Download and verify this model before selecting it.".to_string());
     }
     let mut config = crate::config::load_config(&app).map_err(|error| error.to_string())?;
+    if custom_file_name(&id).is_none() {
+        remember_verified_model(&mut config, &id).map_err(|error| error.to_string())?;
+    }
     config.dictation_model_id = id;
     crate::config::save_config(&app, &config).map_err(|error| error.to_string())?;
     if let Some(state) = app.try_state::<crate::AppState>() {
@@ -340,6 +378,7 @@ async fn download_model_with_cancel(
     let model = catalog_model(id)?;
     let destination = model_path(app, id)?;
     if destination.is_file() && verify_file(&destination, model.sha256).await? {
+        mark_catalog_model_verified(app, id)?;
         return Ok(());
     }
 
@@ -352,7 +391,9 @@ async fn download_model_with_cancel(
     // between hashing and rename. Promote it without doing another network
     // request. Impossible-size partial files cannot be resumed safely.
     if existing == model.size_bytes && verify_file(&temporary, model.sha256).await? {
-        return finalize_verified_download(&temporary, &destination).await;
+        finalize_verified_download(&temporary, &destination).await?;
+        mark_catalog_model_verified(app, id)?;
+        return Ok(());
     }
     if existing >= model.size_bytes {
         tokio::fs::remove_file(&temporary)
@@ -413,7 +454,46 @@ async fn download_model_with_cancel(
         let _ = tokio::fs::remove_file(&temporary).await;
         bail!("Model integrity check failed. The download was discarded.");
     }
-    finalize_verified_download(&temporary, &destination).await
+    finalize_verified_download(&temporary, &destination).await?;
+    mark_catalog_model_verified(app, id)?;
+    Ok(())
+}
+
+/// Persist the fact that a catalog file passed a complete checksum. This lets
+/// the UI stay instant on later visits without weakening the verification gate
+/// before a model is selected or loaded.
+fn mark_catalog_model_verified(app: &AppHandle, id: &str) -> Result<()> {
+    let mut config = crate::config::load_config(app)?;
+    remember_verified_model(&mut config, id)?;
+    crate::config::save_config(app, &config)?;
+    if let Some(state) = app.try_state::<crate::AppState>() {
+        if let Ok(mut current) = state.config.lock() {
+            *current = config;
+        }
+    }
+    Ok(())
+}
+
+fn remember_verified_model(config: &mut crate::config::FlickConfig, id: &str) -> Result<()> {
+    let model = catalog_model(id)?;
+    let record = crate::config::LocalModel {
+        id: model.id.to_string(),
+        name: model.name.to_string(),
+        file_name: model.file_name.to_string(),
+        size_bytes: model.size_bytes,
+        sha256: model.sha256.to_string(),
+        installed: true,
+    };
+    if let Some(existing) = config
+        .local_models
+        .iter_mut()
+        .find(|saved| saved.id == model.id)
+    {
+        *existing = record;
+    } else {
+        config.local_models.push(record);
+    }
+    Ok(())
 }
 
 /// Promote a verified temporary model file atomically. Windows does not
@@ -475,13 +555,14 @@ pub async fn delete_local_model(app: AppHandle, id: String) -> Result<(), String
     // a successful deletion; the default remains intentionally uninstalled
     // until the user chooses or downloads a model again.
     let mut config = crate::config::load_config(&app).map_err(|error| error.to_string())?;
+    config.local_models.retain(|model| model.id != id);
     if config.dictation_model_id == id {
         config.dictation_model_id = crate::config::FlickConfig::default().dictation_model_id;
-        crate::config::save_config(&app, &config).map_err(|error| error.to_string())?;
-        if let Some(state) = app.try_state::<crate::AppState>() {
-            if let Ok(mut current) = state.config.lock() {
-                *current = config;
-            }
+    }
+    crate::config::save_config(&app, &config).map_err(|error| error.to_string())?;
+    if let Some(state) = app.try_state::<crate::AppState>() {
+        if let Ok(mut current) = state.config.lock() {
+            *current = config;
         }
     }
     Ok(())

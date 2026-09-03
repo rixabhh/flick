@@ -17,7 +17,7 @@ test("primary settings sections work with keyboard navigation", async ({ page })
   const models = page.getByRole("tab", { name: "Models", exact: true });
   await models.focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { name: "Local speech models" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Speech models" })).toBeVisible();
 
   const privacy = page.getByRole("tab", { name: "Privacy", exact: true });
   await privacy.focus();

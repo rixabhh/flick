@@ -38,13 +38,14 @@ jobs:
           - os: windows-11-arm
             target: aarch64-pc-windows-msvc
             check_only: false
-          - os: macos-13
+          # macos-13 is retired. This label supplies the supported Intel
+          # runner and prevents release verification from remaining queued.
+          - os: macos-15-intel
             target: x86_64-apple-darwin
             check_only: false
-          # macos-latest currently resolves to the macOS 26 preview image, where
-          # the AppKit binding generator used by active-window detection crashes.
-          # macos-14 is the supported, stable Apple Silicon image.
-          - os: macos-14
+          # macos-15 is the current stable Apple Silicon image. Flick avoids
+          # the former AppKit binding dependency on both macOS architectures.
+          - os: macos-15
             target: aarch64-apple-darwin
             check_only: false
           - os: ubuntu-22.04
