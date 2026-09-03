@@ -74,6 +74,7 @@ jobs:
           # matches this ARM64 runner instead of the Visual Studio generator.
           "CC=clang-cl" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "CXX=clang-cl" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "CXXFLAGS=/EHsc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "CMAKE_GENERATOR=Ninja" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - if: matrix.os == 'ubuntu-22.04'
         run: sudo apt-get update && sudo apt-get install -y clang libclang-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libxdo-dev libxtst-dev libxcb-ewmh-dev libxcb-randr0-dev libdbus-1-dev libasound2-dev pkg-config
