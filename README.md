@@ -1,169 +1,148 @@
 <div align="center">
-  <img src="src-tauri/icons/128x128@2x.png" alt="Flick Logo" width="128" height="128" />
+  <img src="src-tauri/icons/128x128@2x.png" alt="Flick logo" width="128" height="128" />
   <h1>Flick</h1>
-  <p><strong>System-wide AI text transformation at your fingertips.</strong></p>
-
+  <p><strong>Write, dictate, and reply from anywhere—on your terms.</strong></p>
   <p>
     <a href="https://rixabhh.github.io/flick/"><img src="https://img.shields.io/badge/Website-Live-f5f5f5?style=flat-square" alt="Website"></a>
     <a href="https://v2.tauri.app/"><img src="https://img.shields.io/badge/Tauri-v2-24C8DB?style=flat-square&logo=tauri" alt="Tauri v2"></a>
-    <a href="https://svelte.dev/"><img src="https://img.shields.io/badge/Svelte-UI-FF3E00?style=flat-square&logo=svelte" alt="Svelte UI"></a>
-    <a href="https://choosealicense.com/licenses/mit/"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
+    <a href="https://svelte.dev/"><img src="https://img.shields.io/badge/Svelte-UI-FF3E00?style=flat-square&logo=svelte" alt="Svelte"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="MIT License"></a>
   </p>
 </div>
 
-<br />
+Flick is a local-first desktop writing assistant for Windows, macOS, and Linux. Keep the original `!command` workflow, add fully offline dictation, and draft thoughtful replies from an explicit text selection. Bring your own AI provider; speech stays on your machine unless you explicitly enable text-only post-processing.
 
-Flick is a cross-platform desktop utility that brings AI text transformation directly to your cursor. Simply type a trigger command (for example `!translate` or `!casual`) followed by your text anywhere on your computer, and Flick instantly rewrites it in-place.
+> **Beta status:** Stable promotion requires signed/notarized per-platform builds and native acceptance evidence. See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
-Visit the live website: **[rixabhh.github.io/flick](https://rixabhh.github.io/flick/)**
+## What Flick does
 
-No context switching, no copy-pasting — just native text replacement powered by your selected provider and model.
+- **Write anywhere:** Type `!fix`, `!formal`, `!translate:spanish`, or a custom command in a text field. Flick replaces the current text using your configured provider.
+- **Draft replies deliberately:** Select only the context you want, choose a tone, provide a rough instruction, then edit, copy, or explicitly insert the result.
+- **Dictate offline:** Record through a chosen microphone and run local Whisper transcription with adaptive voice-activity detection.
+- **Keep control:** Configure shortcuts, exclusions, plain-text paste, command templates, optional history, diagnostics export, and English/Spanish UI.
 
-## 📋 Table of Contents
+## Quick start
 
-- [Website](#-website)
-- [Features](#-features)
-- [How It Works](#-how-it-works)
-- [Available Commands](#-available-commands)
-- [Architecture](#-architecture)
-- [Getting Started](#-getting-started)
-- [Installation Guide](#-installation-guide)
-- [Security & Privacy](#-security--privacy)
-- [License](#-license)
+1. Open **Settings → Write**, select Gemini, OpenRouter, or an OpenAI-compatible endpoint, then save your own key. Local compatible endpoints may omit a key.
+2. Open **Models** and download a verified speech model for offline dictation.
+3. Open **Dictate** and choose a microphone plus Toggle, Push-to-talk, or Hold-or-toggle activation.
+4. Use Flick in a supported text field:
+   - Type text followed by a `!command`.
+   - Select conversation text and open the reply composer.
+   - Press the dictation shortcut to record locally.
 
-## Website
+The default reply shortcut is `Ctrl+Shift+Space` and dictation shortcut is `Ctrl+Space` on Windows/Linux; macOS uses `Cmd` in place of `Ctrl`.
 
-Explore the polished landing page, commands, privacy notes, and download links at:
+## Write with commands
 
-**[https://rixabhh.github.io/flick/](https://rixabhh.github.io/flick/)**
+| Command | Result |
+| --- | --- |
+| `!fix` | Correct grammar, spelling, and punctuation. |
+| `!formal` / `!casual` | Adjust professional or friendly tone. |
+| `!shorter` / `!longer` | Condense or expand text. |
+| `!rephrase` | Say the same thing more clearly. |
+| `!bullet` / `!explain` | Structure notes or simplify dense text. |
+| `!translate:<language>` | Translate to the named language. |
 
-## ✨ Features
+Create custom commands in **Settings → Commands**. Template import/export is local and includes only triggers and prompts—never keys, drafts, history, or recordings.
 
-- **Global Integration:** Works seamlessly across any application, text editor, or browser.
-- **In-place Execution:** Replaces text natively at the cursor position without opening external windows.
-- **Provider Selection:** Choose between Gemini and OpenRouter from the settings panel.
-- **Model Control:** Select a Gemini model or enter an OpenRouter model manually.
-- **Customizable Pipelines:** Define custom triggers (e.g., `!summarize`, `!professional`) tailored to your workflow.
-- **Hindi + Hinglish Aware:** Built-in and custom prompts preserve Hindi, Hinglish, and code-mixed writing unless you explicitly translate.
-- **BYOK (Bring Your Own Key):** Connect directly to your chosen provider using your personal API key.
-- **Secure Key Storage:** API keys are stored in your OS keychain/credential manager.
-- **Lightweight Footprint:** Built on Tauri v2 and Rust for minimal memory usage and lightning-fast execution.
+## Reply composer
 
-## 🚀 How It Works
+Flick never automatically inspects the screen, chat history, or accessibility tree. It captures only an explicit text selection, restores the clipboard, and opens a compact draft window.
 
-Flick runs silently in your system tray, monitoring keyboard input via an efficient, low-level OS hook. 
+1. Select the message(s) to reference.
+2. Open the composer, choose a tone, and describe the response.
+3. Generate and edit the draft.
+4. Choose **Copy** or explicitly confirm **Insert into app**.
 
-1. **Type a trigger:** Start typing anywhere, prefixing your text with a command (e.g., `!casual`).
-2. **Detection:** Flick captures the buffer and detects the trigger once you stop typing.
-3. **Processing:** The text is routed through your OS clipboard, sent to the selected AI provider, and instantly pasted back to your active cursor position.
+Context is treated as untrusted prompt data and is sent only when you choose **Generate**. Flick verifies the original target before insertion; on target change, protected fields, or paste failure, the draft remains available to copy.
 
-## ⚡ Available Commands
+## Offline dictation and local models
 
-Flick comes with 9 powerful built-in commands designed to handle the most common writing tasks. 
+Dictation records locally, resamples on-device, applies adaptive voice-activity detection, runs Whisper locally, and can clean filler words or apply personal corrections. Press `Escape` during recording to discard it without transcription, history, or paste-back.
 
-### Built-in Triggers
-| Command | What it does for you | Example Input |
-|---|---|---|
-| `!fix` | Cleans up grammar, spelling, and punctuation errors. | "this rly needs fixing!fix" |
-| `!formal` | Elevates your text into a professional, business-ready tone. | "hey im gonna be late to the meeting!formal" |
-| `!casual` | Softens your text to sound more friendly and relaxed. | "Please advise on the status of the project.!casual" |
-| `!shorter` | Condenses long-winded paragraphs into concise summaries. | "(A very long paragraph)!shorter" |
-| `!longer` | Expands brief notes or bullet points with rich detail and context. | "Product launch next week!longer" |
-| `!rephrase` | Rewrites your sentence completely while keeping the exact same meaning. | "It's hard to understand this.!rephrase" |
-| `!bullet` | Structures messy notes into a clean, readable bullet point list. | "milk eggs bread and some juice!bullet" |
-| `!explain` | Breaks down complex text into simple, easy-to-understand language. | "(Dense academic text)!explain" |
-| `!translate:<lang>` | Instantly translates your text to the specified language. | "Hello, how are you today?!translate:spanish" |
+The catalog includes English-focused Tiny, Base, and Small models plus multilingual Tiny, Base, Small, Medium, Large v3 Turbo, and Large v3 tiers. Downloads are direct HTTPS transfers that stream to `.partial`, resume only on confirmed byte ranges, verify SHA-256, and atomically install only verified bytes. Compatible user-supplied Whisper `.bin` files are discovered locally and never uploaded.
 
-### Build Your Own (Custom Triggers)
-Need something specific to your workflow? You can easily create custom triggers in the Settings panel:
-- Define a trigger (e.g., `!code`, `!tweet`, `!docs`)
-- Write a system prompt describing what the command should do (e.g., `"Turn this into a concise product update"`). Existing `{{text}}` templates are still supported.
+Optional AI cleanup is off by default and sends only the final text transcript—not audio—to the configured provider.
 
-## 🏗️ Architecture
+### Linux notes
 
-Flick follows a strict separation of concerns, utilizing Tauri's split-process architecture:
+The recording overlay stays hidden by default on Linux because some X11/Wayland compositors can steal focus and make paste-back unsafe. Flick prefers `xdotool` on X11 and `wtype` (or `dotool`) on Wayland when installed, then falls back to native input. Where Wayland restricts global shortcuts, bind your desktop shortcut to a Flick CLI action.
 
-- **Core Engine (Rust):** Handles the global event hook (`rdev`), input buffering, trigger detection, OS keychain integration, and the clipboard manipulation pipeline.
-- **Frontend (Svelte + Vite):** A responsive, fluid settings dashboard and floating toast indicators built with modern web technologies.
+## Privacy and safety
 
-## 🛠️ Getting Started
+- **BYOK:** Gemini, OpenRouter, and OpenAI-compatible endpoints communicate directly with the provider you configure.
+- **Keychain-backed credentials:** API keys are not stored in the settings JSON file.
+- **Selection-only context:** No automatic OCR, screen capture, chat-history collection, or accessibility-tree scraping.
+- **Protected-target refusal:** Flick blocks known credential-manager apps and user exclusions. Windows also checks the native password-field flag without reading field contents.
+- **Safe insertion:** Dictation and replies verify the original target and restore text clipboard contents after paste transactions.
+- **Local deletion:** Clear history, retained recordings, downloaded models, and stored keys from Settings.
+- **No telemetry by default:** Diagnostics export is explicit and redacted; it excludes credentials, clipboard data, drafts, history contents, and prompts.
 
-### Prerequisites
+## Shortcuts and CLI
 
-- [Node.js](https://nodejs.org/) (v20 or higher)
-- [Rust toolchain](https://rustup.rs/) (v1.75 or higher)
-- [Tauri v2 OS dependencies](https://v2.tauri.app/start/prerequisites/)
+| Action | Windows / Linux | macOS |
+| --- | --- | --- |
+| Reply composer | `Ctrl+Shift+Space` | `Cmd+Shift+Space` |
+| Dictation | `Ctrl+Space` | `Cmd+Space` |
+| Copy last local result | `Ctrl+Alt+C` | `Cmd+Alt+C` |
+| Paste as plain text | `Ctrl+Alt+V` | `Cmd+Alt+V` |
 
-### Build & Run
+Desktop environments and external hotkey tools can route a fixed action set to a running Flick instance:
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/rixabhh/flick.git
-   cd flick
-   ```
+```text
+flick --open-settings
+flick --open-composer
+flick --toggle-dictation
+flick --cancel-dictation
+flick --copy-last-result
+```
 
-2. **Install frontend dependencies**
-   ```bash
-   npm install
-   ```
+Unknown arguments are ignored. The CLI never accepts arbitrary text, prompts, or shell commands.
 
-3. **Run in development mode**
-   ```bash
-   npm run tauri dev
-   ```
+## Platforms
 
-4. **Build release binaries**
-   ```bash
-   npm run tauri build
-   ```
+| Platform | Target | Notes |
+| --- | --- | --- |
+| Windows | x64, ARM64 | Native password-field protection is available. |
+| macOS | Apple Silicon, Intel | Grant microphone/accessibility permissions when prompted. |
+| Linux | x64 | X11 is first-class; Wayland may need an input helper and desktop shortcut. |
 
-## � Installation Guide
+## Develop and verify
 
-### Windows
+Prerequisites: Node.js 20+, Rust 1.77+, and [Tauri v2 platform prerequisites](https://v2.tauri.app/start/prerequisites/).
 
-1. Download the latest `.msi` or `.exe` installer from the Releases page.
-2. Run the installer and follow the prompts.
-3. If Windows shows a SmartScreen warning, click **More info** and then **Run anyway**.
-4. After install, launch Flick from the Start menu or system tray.
-5. Open Settings and add your API key.
+```bash
+git clone https://github.com/rixabhh/flick.git
+cd flick
+npm ci
+npm run tauri dev
 
-### macOS
+npm test
+npm run test:e2e
+npm run build
+cargo test --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+```
 
-1. Download the latest `.dmg` file from the Releases page.
-2. Open the `.dmg` and drag Flick into the Applications folder.
-3. If macOS blocks the app because it is from an unidentified developer, open **System Settings → Privacy & Security** and allow it.
-4. You may also need to right-click the app once and select **Open** the first time.
-5. Launch Flick and grant any required accessibility or keyboard permissions if prompted.
-6. Open Settings and add your API key.
+The real local Whisper smoke test is opt-in and needs local model/audio fixtures:
 
-> macOS can be a bit stricter about permissions, so the first launch is often the only tricky step.
+```text
+FLICK_WHISPER_MODEL=/path/to/ggml-tiny.en.bin
+FLICK_WHISPER_SAMPLE=/path/to/sample.wav
+cargo test --manifest-path src-tauri/Cargo.toml transcribes_real_whisper_audio -- --ignored
+```
 
-### Linux
+CI verifies frontend, browser UI, and native targets across Windows x64/ARM64, macOS Intel/Apple Silicon, and Linux x64. Physical hardware, compositor, signing, and notarization checks remain release gates.
 
-1. Download the appropriate package for your distro:
-   - `.deb` for Debian/Ubuntu-based systems
-   - `.AppImage` for most other distributions
-2. For `.deb` packages, install it with:
-   ```bash
-   sudo apt install ./flick_*.deb
-   ```
-3. For `.AppImage`, make it executable and run it:
-   ```bash
-   chmod +x Flick.AppImage
-   ./Flick.AppImage
-   ```
-4. If your desktop environment blocks the app, allow it to run from the file manager or terminal.
-5. Launch Flick and add your API key in Settings.
+## Project structure
 
-## �🔒 Security & Privacy
+- `src-tauri/src/` — Rust services for input, dictation, models, history, providers, diagnostics, and native integration.
+- `src/lib/` — Svelte command center, composer, overlay, models, history, and UI helpers.
+- `.github/workflows/` — verification and draft-release workflows.
+- `CHANGELOG.md` — beta release notes.
+- `RELEASE_CHECKLIST.md` — signing and promotion checklist.
 
-We take privacy seriously. Flick is designed to be as secure as possible:
+## License
 
-- **Local Memory Buffer:** Keystrokes are temporarily held in an ephemeral memory buffer that is strictly bounded in size. The buffer is immediately cleared upon mouse clicks, Enter, or navigation keys.
-- **Secure Key Storage:** API keys are stored using your operating system's native secure credential manager (Windows Credential Manager, macOS Keychain, or Linux Secret Service).
-- **Direct API Communication:** Flick communicates directly with your chosen provider (Gemini or OpenRouter) and does not route requests through any extra server.
-- **No Telemetry:** The app does not collect analytics or usage telemetry by default.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Flick is available under the [MIT License](LICENSE).

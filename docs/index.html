@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Flick is an AI-powered desktop text transformation utility for rewriting, fixing, translating, and customizing text anywhere you type."
+      content="Flick is a local-first desktop writing assistant with global AI commands, offline dictation, and a privacy-first reply composer."
     />
-    <meta property="og:title" content="Flick - Type. Trigger. Done." />
+    <meta property="og:title" content="Flick - Write, dictate, and reply anywhere." />
     <meta
       property="og:description"
-      content="AI-powered desktop text transformation anywhere you type. Built with Rust, Tauri, and Svelte."
+      content="Global writing commands, offline local dictation, and deliberate AI reply drafting for desktop."
     />
     <meta property="og:type" content="website" />
     <meta name="theme-color" content="#050505" />
-    <title>Flick - Type. Trigger. Done.</title>
+    <title>Flick - Write, dictate, and reply anywhere.</title>
     <link rel="icon" type="image/png" href="./assets/flick-logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -33,6 +33,7 @@
         </a>
         <nav class="nav-links" aria-label="Primary navigation">
           <a href="#commands">Commands</a>
+          <a href="#dictation">Dictation</a>
           <a href="#privacy">Privacy</a>
           <a href="#download">Download</a>
         </nav>
@@ -42,13 +43,13 @@
       <main id="top">
         <section class="hero">
           <div class="hero-copy" data-reveal>
-            <p class="eyebrow">AI text transformation for desktop</p>
+            <p class="eyebrow">Local-first writing assistance for desktop</p>
             <h1>Flick</h1>
-            <p class="tagline">Type. Trigger. Done.</p>
+            <p class="tagline">Write. Dictate. Reply.</p>
             <p class="hero-text">
-              Rewrite, fix, translate, and customize text anywhere you type.
-              Flick stays out of your way until a trigger turns rough words into
-              finished writing.
+              Use global writing commands, dictate fully offline, and turn an
+              explicit conversation selection into an editable reply. Flick
+              stays out of your way until you ask for help.
             </p>
             <div class="hero-actions">
               <a class="button primary" href="https://github.com/rixabhh/flick/releases/latest">
@@ -70,7 +71,7 @@
               <div class="editor-preview">
                 <p class="muted-line">Message</p>
                 <div class="text-line active">
-                  this needs to sound sharper for launch<span class="trigger">!improve</span>
+                  this needs to sound sharper for launch<span class="trigger">!fix</span>
                 </div>
                 <div class="transform-chip">
                   <span class="spinner"></span>
@@ -86,16 +87,16 @@
 
         <section class="metrics" aria-label="Flick highlights" data-reveal>
           <div>
-            <strong>10</strong>
+            <strong>9</strong>
             <span>built-in commands</span>
           </div>
           <div>
-            <strong>2</strong>
-            <span>AI providers</span>
+            <strong>100%</strong>
+            <span>offline speech option</span>
           </div>
           <div>
-            <strong>0</strong>
-            <span>app switching</span>
+            <strong>3</strong>
+            <span>provider paths</span>
           </div>
         </section>
 
@@ -141,11 +142,32 @@
             <article><code>!casual</code><span>Natural, friendly phrasing for everyday messages.</span></article>
             <article><code>!shorter</code><span>Condense long text without losing the point.</span></article>
             <article><code>!longer</code><span>Expand short ideas with useful context.</span></article>
-            <article><code>!improve</code><span>Improve clarity, flow, grammar, and readability.</span></article>
             <article><code>!rephrase</code><span>Same meaning, cleaner wording.</span></article>
             <article><code>!bullet</code><span>Turn messy notes into scannable bullets.</span></article>
             <article><code>!explain</code><span>Simplify complex text into plain language.</span></article>
             <article><code>!translate:&lt;lang&gt;</code><span>Translate into another language on demand.</span></article>
+          </div>
+        </section>
+
+        <section id="dictation" class="section-grid">
+          <div class="section-copy" data-reveal>
+            <p class="eyebrow">Offline dictation</p>
+            <h2>Speak naturally. Keep audio local.</h2>
+            <p>Choose a microphone and a verified local Whisper model. Flick detects speech, transcribes on-device, and pastes only when the original app is still the safe target.</p>
+          </div>
+          <div class="steps" data-reveal>
+            <div class="step"><span>LOCAL</span><p>Audio stays on your computer for offline transcription.</p></div>
+            <div class="step"><span>SAFE</span><p>Target changes and protected fields fall back to Copy instead of paste.</p></div>
+            <div class="step"><span>YOURS</span><p>Choose models from Tiny through Large v3 or add a compatible local model.</p></div>
+          </div>
+        </section>
+
+        <section class="feature-band">
+          <div data-reveal><p class="eyebrow">Reply composer</p><h2>Context only when you select it.</h2></div>
+          <div class="prompt-card" data-reveal>
+            <div class="prompt-row"><span>1</span><p>Select the exact conversation text to reference.</p></div>
+            <div class="prompt-row"><span>2</span><p>Choose a tone, describe your intent, and generate an editable draft.</p></div>
+            <div class="prompt-row"><span>3</span><p>Copy it, or explicitly insert it after Flick verifies the target.</p></div>
           </div>
         </section>
 
@@ -188,15 +210,16 @@
           <div class="provider-row">
             <span>Gemini</span>
             <span>OpenRouter</span>
-            <span>Custom model selection</span>
+            <span>OpenAI-compatible</span>
+            <span>Offline Whisper</span>
             <span>Hindi + Hinglish aware</span>
           </div>
         </section>
 
         <section id="download" class="download-panel" data-reveal>
           <img src="./assets/flick-logo.png" alt="" />
-          <p class="eyebrow">Flick 1.0.0</p>
-          <h2>Bring AI rewriting to every text box on your desktop.</h2>
+          <p class="eyebrow">Flick 2.0 beta</p>
+          <h2>Bring deliberate writing assistance to every text box on your desktop.</h2>
           <div class="hero-actions">
             <a class="button primary" href="https://github.com/rixabhh/flick/releases/latest">
               Download latest
