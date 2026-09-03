@@ -6,6 +6,7 @@
 // - Runs trigger detection + replacement pipeline
 
 pub mod ai_client;
+pub mod active_target;
 pub mod buffer;
 pub mod commands;
 pub mod composer;

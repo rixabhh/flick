@@ -7,7 +7,7 @@ use arboard::Clipboard;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::time::{sleep, Duration};
 
-use crate::{ai_client, key_hook, keychain, replacer, AppState, ComposerTargetState};
+use crate::{active_target, ai_client, key_hook, keychain, replacer, AppState, ComposerTargetState};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TargetIdentity {
@@ -16,11 +16,11 @@ pub struct TargetIdentity {
 }
 
 fn foreground_target() -> Result<TargetIdentity, String> {
-    let window = active_win_pos_rs::get_active_window()
-        .map_err(|_| "Flick could not verify the active app".to_string())?;
+    let window = active_target::get()
+        .ok_or_else(|| "Flick could not verify the active app".to_string())?;
     Ok(TargetIdentity {
-        app_name: window.app_name.to_ascii_lowercase(),
-        process_path: window.process_path.to_string_lossy().to_ascii_lowercase(),
+        app_name: window.app_name,
+        process_path: window.process_path,
     })
 }
 

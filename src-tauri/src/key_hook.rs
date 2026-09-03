@@ -52,12 +52,12 @@ pub fn active_app_is_disabled(disabled_apps: &[String]) -> bool {
 /// protection with their own per-app exclusion list.
 pub fn active_app_is_protected(disabled_apps: &[String]) -> bool {
     let secure_input = focused_input_is_secure();
-    let Ok(window) = active_win_pos_rs::get_active_window() else {
+    let Some(window) = crate::active_target::get() else {
         return secure_input;
     };
-    let app_name = window.app_name.to_ascii_lowercase();
-    let title = window.title.to_ascii_lowercase();
-    let path = window.process_path.to_string_lossy().to_ascii_lowercase();
+    let app_name = window.app_name;
+    let title = window.title;
+    let path = window.process_path;
     matches_disabled_app(disabled_apps, &app_name, &title, &path)
         || matches_sensitive_app(&app_name, &path)
         || secure_input
@@ -69,12 +69,12 @@ pub fn active_app_matches(apps: &[String]) -> bool {
     if apps.is_empty() {
         return false;
     }
-    let Ok(window) = active_win_pos_rs::get_active_window() else {
+    let Some(window) = crate::active_target::get() else {
         return false;
     };
-    let app_name = window.app_name.to_ascii_lowercase();
-    let title = window.title.to_ascii_lowercase();
-    let path = window.process_path.to_string_lossy().to_ascii_lowercase();
+    let app_name = window.app_name;
+    let title = window.title;
+    let path = window.process_path;
     matches_disabled_app(apps, &app_name, &title, &path)
 }
 

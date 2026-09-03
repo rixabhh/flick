@@ -294,10 +294,10 @@ pub fn start(app: &AppHandle) -> Result<()> {
 }
 
 fn foreground_target() -> Option<DictationTarget> {
-    let window = active_win_pos_rs::get_active_window().ok()?;
+    let window = crate::active_target::get()?;
     Some(DictationTarget {
-        app_name: window.app_name.to_ascii_lowercase(),
-        process_path: window.process_path.to_string_lossy().to_ascii_lowercase(),
+        app_name: window.app_name,
+        process_path: window.process_path,
     })
 }
 
