@@ -4,8 +4,8 @@
 
 use anyhow::Result;
 use tauri::{
-    menu::{MenuBuilder, MenuItemBuilder, CheckMenuItemBuilder},
-    AppHandle, Manager,
+    menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder},
+    AppHandle, Emitter, Manager,
 };
 
 /// Set up the system tray icon and menu - per §8.6.
@@ -18,6 +18,12 @@ pub fn setup_tray(app: &AppHandle) -> Result<()> {
     let settings_item = MenuItemBuilder::with_id("settings", "Open Settings")
         .build(app)
         .map_err(|e| anyhow::anyhow!("Failed to create settings menu item: {}", e))?;
+    let recent_item = MenuItemBuilder::with_id("recent", "Recent actions")
+        .build(app)
+        .map_err(|e| anyhow::anyhow!("Failed to create recent-actions menu item: {}", e))?;
+    let copy_last_item = MenuItemBuilder::with_id("copy-last", "Copy last result")
+        .build(app)
+        .map_err(|e| anyhow::anyhow!("Failed to create copy-last menu item: {}", e))?;
 
     let quit_item = MenuItemBuilder::with_id("quit", "Quit")
         .build(app)
@@ -27,6 +33,8 @@ pub fn setup_tray(app: &AppHandle) -> Result<()> {
         .item(&enabled_item)
         .separator()
         .item(&settings_item)
+        .item(&recent_item)
+        .item(&copy_last_item)
         .separator()
         .item(&quit_item)
         .build()
@@ -37,20 +45,27 @@ pub fn setup_tray(app: &AppHandle) -> Result<()> {
         tray.set_menu(Some(menu))
             .map_err(|e| anyhow::anyhow!("Failed to set tray menu: {}", e))?;
 
-        tray.on_menu_event(move |app, event| {
-            match event.id().as_ref() {
-                "enabled" => {
-                    handle_toggle_enabled(app);
-                }
-                "settings" => {
-                    handle_open_settings(app);
-                }
-                "quit" => {
-                    log::info!("Quit requested from tray");
-                    app.exit(0);
-                }
-                _ => {}
+        tray.on_menu_event(move |app, event| match event.id().as_ref() {
+            "enabled" => {
+                handle_toggle_enabled(app);
             }
+            "settings" => {
+                open_settings(app);
+            }
+            "recent" => {
+                open_settings(app);
+                let _ = app.emit("flick://open-history", ());
+            }
+            "copy-last" => match crate::history::copy_last_result(app) {
+                Ok(true) => {}
+                Ok(false) => log::info!("No history entry is available to copy"),
+                Err(error) => log::warn!("Could not copy last history entry: {error}"),
+            },
+            "quit" => {
+                log::info!("Quit requested from tray");
+                app.exit(0);
+            }
+            _ => {}
         });
     }
 
@@ -71,12 +86,15 @@ fn handle_toggle_enabled(app: &AppHandle) {
             let _ = crate::config::save_config(app, &cfg);
         }
 
-        log::info!("Flick {} via tray", if new_val { "enabled" } else { "disabled" });
+        log::info!(
+            "Flick {} via tray",
+            if new_val { "enabled" } else { "disabled" }
+        );
     }
 }
 
 /// Handle "Open Settings" from the tray menu.
-fn handle_open_settings(app: &AppHandle) {
+pub fn open_settings(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("settings") {
         let _ = window.show();
         let _ = window.set_focus();

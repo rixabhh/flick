@@ -2,8 +2,8 @@
 // Per PRD §8.2: Trigger detection with regex for built-in + custom commands.
 // Checked against the buffer tail (last 40 chars) on every keypress.
 
-use regex::Regex;
 use once_cell::sync::Lazy;
+use regex::Regex;
 
 /// Result of a successful trigger match.
 #[derive(Debug, Clone, PartialEq)]
@@ -18,13 +18,13 @@ pub struct TriggerMatch {
 
 // Built-in simple commands regex - per §8.2
 static SIMPLE_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"!(?P<cmd>fix|formal|casual|shorter|longer|improve|rephrase|bullet|explain)$").unwrap()
+    Regex::new(r"!(?P<cmd>fix|formal|casual|shorter|longer|improve|rephrase|bullet|explain)$")
+        .unwrap()
 });
 
 // Built-in parameterized commands regex - per §8.2
-static PARAM_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"!(?P<cmd>translate):(?P<param>[a-zA-Z]+)$").unwrap()
-});
+static PARAM_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"!(?P<cmd>translate):(?P<param>[a-zA-Z]+)$").unwrap());
 
 /// Check the buffer tail for a built-in trigger match.
 pub fn detect_builtin(text: &str) -> Option<TriggerMatch> {
@@ -107,7 +107,10 @@ mod tests {
 
     #[test]
     fn test_all_simple_commands() {
-        for cmd in &["fix", "formal", "casual", "shorter", "longer", "improve", "rephrase", "bullet", "explain"] {
+        for cmd in &[
+            "fix", "formal", "casual", "shorter", "longer", "improve", "rephrase", "bullet",
+            "explain",
+        ] {
             let input = format!("test text!{}", cmd);
             let result = detect_builtin(&input);
             assert!(result.is_some(), "Failed for command: {}", cmd);
