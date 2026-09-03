@@ -33,6 +33,26 @@ Flick is a local-first desktop writing assistant for Windows, macOS, and Linux. 
 
 The default reply shortcut is `Ctrl+Shift+Space` and dictation shortcut is `Ctrl+Space` on Windows/Linux; macOS uses `Cmd` in place of `Ctrl`.
 
+## Your first day with Flick
+
+Flick is designed to stay invisible until you call it. You do not need to learn a new editor or move your work into a separate window.
+
+| If you want to… | Do this | What happens next |
+| --- | --- | --- |
+| Improve a sentence | Add `!fix` at the end of the sentence | Flick replaces that text in the app you are already using. |
+| Send a considered reply | Select the relevant message, press the reply shortcut, choose a tone, and state your intent | Review the editable draft, then Copy or explicitly Insert it. |
+| Write without typing | Press the dictation shortcut, speak, then press it again (or release it in push-to-talk mode) | Flick transcribes locally and safely pastes the result only if the original field is still active. |
+
+Start with `!fix`, **Casual** replies, and the **Tiny English** model. They are the quickest way to learn the flow. Move to a larger or multilingual model only when you need more accuracy or languages; the Models page displays each download’s disk size before you choose it.
+
+### If something does not work
+
+- **No dictation:** Download a model, then select the correct microphone in **Dictate**. Approve the OS microphone permission when it appears.
+- **Nothing is pasted:** Flick deliberately refuses to paste into protected fields or after the target app changes. The result remains available to copy.
+- **Shortcut is ignored:** Change it under **Advanced**, or on restricted Wayland desktops bind a desktop shortcut to the documented Flick CLI action.
+- **Model download stopped:** Use Download again. Flick resumes only when the model server confirms the byte range, and validates the complete file before it appears as installed.
+- **AI generation is unavailable:** Check the provider/key in **Write**. Local OpenAI-compatible servers can be configured without a key.
+
 ## Write with commands
 
 | Command | Result |
