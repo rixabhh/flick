@@ -11,7 +11,6 @@ use serde::Serialize;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
-use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
 struct Active {
     stream: Stream,
@@ -499,18 +498,33 @@ async fn stop_and_transcribe_inner(app: &AppHandle) -> Result<String> {
     if settings.retain_recordings {
         retain_recording(app, &audio, settings.recording_retention_count).await?;
     }
-    if crate::models::model_is_english_only(&settings.dictation_model_id)?
+    let provider = crate::dictation_provider::provider_info(&settings.dictation_provider)?;
+    if provider.requires_local_model
+        && crate::models::model_is_english_only(&settings.dictation_model_id)?
         && (settings.dictation_language != "en" || settings.dictation_translate_to_english)
     {
         bail!("Choose the multilingual speech model to dictate in another language or translate.");
     }
-    let path = crate::models::verified_installed_model_path(app)
-        .await?
-        .context("Download a local speech model before dictating")?;
+    let path = if provider.requires_local_model {
+        crate::models::verified_installed_model_path(app).await?
+    } else {
+        None
+    };
     show_overlay(app, "transcribing");
     let language = settings.dictation_language.clone();
     let translate = settings.dictation_translate_to_english;
-    let text = tokio::task::spawn_blocking(move || transcribe(&path, &audio, &language, translate))
+    let provider_id = settings.dictation_provider.clone();
+    let text = tokio::task::spawn_blocking(move || {
+        crate::dictation_provider::transcribe(
+            &provider_id,
+            crate::dictation_provider::TranscriptionRequest {
+                audio: &audio,
+                language: &language,
+                translate_to_english: translate,
+                local_model_path: path.as_deref(),
+            },
+        )
+    })
         .await
         .context("Transcription task failed")??;
     if text.trim().is_empty() {
@@ -696,35 +710,6 @@ fn trim_silence(audio: Vec<f32>) -> Vec<f32> {
         _ => Vec::new(),
     }
 }
-fn transcribe(
-    path: &std::path::Path,
-    audio: &[f32],
-    language: &str,
-    translate: bool,
-) -> Result<String> {
-    let context = WhisperContext::new_with_params(path, WhisperContextParameters::default())
-        .context("Could not load local speech model")?;
-    let mut state = context
-        .create_state()
-        .context("Could not initialize transcription engine")?;
-    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-    params.set_print_progress(false);
-    params.set_print_realtime(false);
-    params.set_print_timestamps(false);
-    params.set_language((language != "auto").then_some(language));
-    params.set_translate(translate);
-    state
-        .full(params, audio)
-        .context("Local transcription failed")?;
-    Ok(state
-        .as_iter()
-        .map(|s| s.to_string())
-        .collect::<Vec<_>>()
-        .join(" ")
-        .trim()
-        .to_string())
-}
-
 fn post_process(
     text: String,
     remove_fillers: bool,
@@ -809,7 +794,16 @@ mod tests {
             .collect();
         let audio = resample(&samples, spec.channels as usize, spec.sample_rate);
         let text =
-            transcribe(std::path::Path::new(&model), &audio, "en", false).expect("transcribe");
+        crate::dictation_provider::transcribe(
+            crate::dictation_provider::LOCAL_WHISPER_PROVIDER_ID,
+            crate::dictation_provider::TranscriptionRequest {
+                audio: &audio,
+                language: "en",
+                translate_to_english: false,
+                local_model_path: Some(std::path::Path::new(&model)),
+            },
+        )
+        .expect("transcribe");
         assert!(
             text.to_lowercase().contains("ask not"),
             "unexpected transcript: {text}"

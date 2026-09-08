@@ -71,6 +71,11 @@ pub struct FlickConfig {
     pub dictation_device_id: String,
     #[serde(default = "default_dictation_model_id")]
     pub dictation_model_id: String,
+    /// The audio-to-text provider. Existing configurations deserialize to the
+    /// private local Whisper default, so upgrading cannot make audio leave the
+    /// device.
+    #[serde(default = "default_dictation_provider")]
+    pub dictation_provider: String,
     #[serde(default = "default_dictation_language")]
     pub dictation_language: String,
     #[serde(default)]
@@ -100,7 +105,7 @@ pub struct FlickConfig {
 }
 
 fn default_config_version() -> u32 {
-    2
+    3
 }
 fn default_theme() -> String {
     "system".to_string()
@@ -146,6 +151,9 @@ fn default_dictation_mode() -> String {
 fn default_dictation_model_id() -> String {
     "whisper-tiny-en".to_string()
 }
+fn default_dictation_provider() -> String {
+    crate::dictation_provider::LOCAL_WHISPER_PROVIDER_ID.to_string()
+}
 fn default_dictation_language() -> String {
     "en".to_string()
 }
@@ -162,7 +170,7 @@ fn default_recording_retention_count() -> usize {
 impl Default for FlickConfig {
     fn default() -> Self {
         Self {
-            version: 2,
+            version: 3,
             enabled: true,
             launch_at_login: false,
             show_done_toast: true,
@@ -180,6 +188,7 @@ impl Default for FlickConfig {
             dictation_mode: default_dictation_mode(),
             dictation_device_id: String::new(),
             dictation_model_id: default_dictation_model_id(),
+            dictation_provider: default_dictation_provider(),
             dictation_language: default_dictation_language(),
             dictation_translate_to_english: false,
             dictation_filler_cleanup: true,
@@ -233,8 +242,12 @@ pub fn load_config(app: &AppHandle) -> Result<FlickConfig> {
 fn migrate_config(mut config: FlickConfig) -> (FlickConfig, bool) {
     // Flick 1.x command entries did not have stable IDs. Fill them on load so
     // callers can stop relying on array positions without breaking old users.
-    let mut migrated = config.version < 2;
-    config.version = 2;
+    let mut migrated = config.version < 3;
+    config.version = 3;
+    if config.dictation_provider.trim().is_empty() {
+        config.dictation_provider = default_dictation_provider();
+        migrated = true;
+    }
     for command in &mut config.custom_commands {
         if command.id.is_empty() {
             command.id = format!("cmd-{}", command.trigger);
@@ -274,6 +287,7 @@ mod tests {
         assert_eq!(config.provider, "gemini");
         assert_eq!(config.model, "gemini-2.5-flash-lite");
         assert_eq!(config.dictation_model_id, "whisper-tiny-en");
+        assert_eq!(config.dictation_provider, "local-whisper");
         assert!(config.custom_commands.is_empty());
     }
 
@@ -339,12 +353,25 @@ mod tests {
 
         let (migrated, changed) = migrate_config(legacy);
         assert!(changed);
-        assert_eq!(migrated.version, 2);
+        assert_eq!(migrated.version, 3);
         assert!(!migrated.enabled);
         assert!(migrated.launch_at_login);
         assert!(!migrated.show_done_toast);
         assert_eq!(migrated.provider, "openrouter");
         assert_eq!(migrated.model, "openai/gpt-4o-mini");
         assert_eq!(migrated.custom_commands[0].id, "cmd-tldr");
+        assert_eq!(migrated.dictation_provider, "local-whisper");
+    }
+
+    #[test]
+    fn migrates_blank_dictation_provider_to_private_local_default() {
+        let legacy = FlickConfig {
+            version: 2,
+            dictation_provider: "  ".into(),
+            ..FlickConfig::default()
+        };
+        let (migrated, changed) = migrate_config(legacy);
+        assert!(changed);
+        assert_eq!(migrated.dictation_provider, "local-whisper");
     }
 }

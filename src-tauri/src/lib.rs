@@ -13,6 +13,7 @@ pub mod composer;
 pub mod config;
 pub mod diagnostics;
 pub mod dictation;
+pub mod dictation_provider;
 pub mod history;
 pub mod key_hook;
 pub mod keychain;
@@ -77,6 +78,7 @@ pub fn run() {
             dictation::preview_input_level,
             dictation::dictation_runtime_info,
             dictation::clear_retained_recordings,
+            dictation_provider::list_dictation_providers,
             diagnostics::export_diagnostics,
             models::list_local_models,
             models::download_local_model,
