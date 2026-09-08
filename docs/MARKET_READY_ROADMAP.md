@@ -118,13 +118,16 @@ Each commit must be independently buildable, have focused tests, use
 
 3. `feat(dictation): add verified local ONNX model support`
    - Port the minimal proven Handy model descriptor approach: engine type,
-     source, artifact format, capabilities, checksums, download status, and
-     compatibility checks.
+     Hugging Face source with pinned revision, artifact format, capabilities,
+     checksums, download status, and compatibility checks.
    - Ship Parakeet as the first ONNX provider; add Moonshine/SenseVoice only
      after their fixtures, licensing, memory budget, and platform packages are
      verified.
-   - Preserve resumable, checksum-verified, atomic downloads and add model
-     load/unload and incompatible-language tests.
+   - Use Hugging Face Hub cache discovery so already-downloaded eligible models
+     are recognized without duplication. Preserve resumable, cancellable,
+     checksum-verified, atomic downloads; use a verified mirror only after an
+     explicit Hub failure; add model load/unload and incompatible-language
+     tests.
 
 4. `feat(dictation): add opt-in cloud transcription providers`
    - Add a provider registry, secure per-provider credentials, connection
