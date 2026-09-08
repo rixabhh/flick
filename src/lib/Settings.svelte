@@ -56,6 +56,7 @@
   let inputLevel = $state(0);
   let dictationRuntime = $state(null);
   let dictationProviders = $state([]);
+  let localModelCapabilities = $state(null);
   let diagnosticsPath = $state("");
   let keyRemovalMessage = $state("");
   let recordingDeletionMessage = $state("");
@@ -77,6 +78,7 @@
 
   function selectTab(index) {
     activeTab = tabs[index].id;
+    if (activeTab === "dictate") void refreshDictationConfiguration();
   }
 
   function handleTabKeydown(event, index) {
@@ -124,6 +126,25 @@
     try { dictationProviders = await invoke("list_dictation_providers"); }
     catch (error) { console.error("Failed to list dictation providers:", error); }
   }
+
+  async function refreshActiveLocalModelCapabilities() {
+    try { localModelCapabilities = await invoke("active_local_model_capabilities"); }
+    catch (error) { console.error("Failed to read local model capabilities:", error); localModelCapabilities = null; }
+  }
+
+  async function refreshDictationConfiguration() {
+    try {
+      const saved = await invoke("get_config");
+      if (saved) config = { ...config, ...saved };
+    } catch (error) {
+      console.error("Failed to refresh dictation configuration:", error);
+    }
+    await refreshActiveLocalModelCapabilities();
+  }
+
+  const modelSupportsLanguage = (language) => language === "auto"
+    || !localModelCapabilities?.supported_languages?.length
+    || localModelCapabilities.supported_languages.includes(language);
 
   function saveCorrections(value) {
     updateConfig("dictation_corrections", parseCorrections(value));
@@ -216,6 +237,7 @@
         applyLanguage(config.app_language);
         refreshDictationRuntime();
         refreshDictationProviders();
+        refreshActiveLocalModelCapabilities();
 
         try {
           const autostartEnabled = await isEnabled();
@@ -502,8 +524,8 @@
         <label class="setting-field"><span>Floating pill position</span><select bind:value={config.floating_pill_position} onchange={updateFloatingPillPosition}><option value="bottom-center">Bottom center</option><option value="bottom-left">Bottom left</option><option value="bottom-right">Bottom right</option><option value="top-center">Top center</option></select><small>Used for both dictation and transformation status. It stays out of your active app until needed.</small></label>
         <label class="setting-field"><span>Activation</span><select bind:value={config.dictation_mode} onchange={() => updateConfig("dictation_mode", config.dictation_mode)}><option value="hold-or-toggle">Hold or toggle</option><option value="push-to-talk">Push to talk</option><option value="toggle">Toggle</option></select></label>
         <label class="setting-field"><span>Microphone</span><select bind:value={config.dictation_device_id} onchange={() => updateConfig("dictation_device_id", config.dictation_device_id)}><option value="">System default</option>{#each inputDevices as device}<option value={device.id}>{device.name}{device.is_default ? " (default)" : ""}</option>{/each}</select></label>
-        <label class="setting-field"><span>Spoken language</span><select bind:value={config.dictation_language} onchange={() => updateConfig("dictation_language", config.dictation_language)}><option value="en">English</option><option value="es">Spanish</option><option value="hi">Hindi</option><option value="fr">French</option><option value="de">German</option><option value="auto">Detect automatically</option></select></label>
-        {#if config.dictation_provider === "local-whisper"}<div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Translate speech to English</span><span class="toggle-label-desc">Requires a compatible multilingual Whisper model; Parakeet transcribes only.</span></div><label class="toggle"><input type="checkbox" checked={config.dictation_translate_to_english} onchange={() => updateConfig("dictation_translate_to_english", !config.dictation_translate_to_english)} /><span class="toggle-slider"></span></label></div>{:else}<div class="panel quick-card"><strong>Translation is unavailable in cloud mode</strong><span class="text-secondary">Compatible transcription APIs vary by model. Flick will not make a translation claim it cannot verify.</span></div>{/if}
+        <label class="setting-field"><span>Spoken language</span><select bind:value={config.dictation_language} onchange={() => updateConfig("dictation_language", config.dictation_language)}><option value="en">English</option><option value="es" disabled={config.dictation_provider === "local-whisper" && !modelSupportsLanguage("es")}>Spanish</option><option value="hi" disabled={config.dictation_provider === "local-whisper" && !modelSupportsLanguage("hi")}>Hindi</option><option value="fr" disabled={config.dictation_provider === "local-whisper" && !modelSupportsLanguage("fr")}>French</option><option value="de" disabled={config.dictation_provider === "local-whisper" && !modelSupportsLanguage("de")}>German</option><option value="auto">Detect automatically</option></select>{#if config.dictation_provider === "local-whisper" && localModelCapabilities?.supported_languages?.length}<small>This model supports: {localModelCapabilities.supported_languages.join(", ")}. Unsupported languages are unavailable rather than silently passed to the engine.</small>{/if}</label>
+        {#if config.dictation_provider === "local-whisper"}{#if localModelCapabilities && !localModelCapabilities.supports_translation && config.dictation_translate_to_english}<div class="panel quick-card"><strong>Translation was turned on for an older model</strong><span class="text-secondary">Turn it off before dictating, or choose a multilingual Whisper model. Flick will not ask the selected model to do an unsupported translation.</span></div>{/if}<div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Translate speech to English</span><span class="toggle-label-desc">Available only with a multilingual Whisper model. Parakeet, English-only Whisper, and custom models transcribe only.</span></div><label class="toggle"><input type="checkbox" checked={config.dictation_translate_to_english} disabled={localModelCapabilities && !localModelCapabilities.supports_translation && !config.dictation_translate_to_english} onchange={() => updateConfig("dictation_translate_to_english", !config.dictation_translate_to_english)} /><span class="toggle-slider"></span></label></div>{:else}<div class="panel quick-card"><strong>Translation is unavailable in cloud mode</strong><span class="text-secondary">Compatible transcription APIs vary by model. Flick will not make a translation claim it cannot verify.</span></div>{/if}
         <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Remove common filler words</span><span class="toggle-label-desc">Locally removes um, uh, erm, and ah from final text</span></div><label class="toggle"><input type="checkbox" checked={config.dictation_filler_cleanup} onchange={() => updateConfig("dictation_filler_cleanup", !config.dictation_filler_cleanup)} /><span class="toggle-slider"></span></label></div>
         <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">AI cleanup after transcription</span><span class="toggle-label-desc">Off by default. Sends only the finished transcript to your configured provider; audio stays local.</span></div><label class="toggle"><input type="checkbox" checked={config.dictation_llm_post_process} onchange={() => updateConfig("dictation_llm_post_process", !config.dictation_llm_post_process)} /><span class="toggle-slider"></span></label></div>
         <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Keep local recording files</span><span class="toggle-label-desc">Off by default. Saves a local WAV after dictation for review.</span></div><label class="toggle"><input type="checkbox" checked={config.retain_recordings} onchange={() => updateConfig("retain_recordings", !config.retain_recordings)} /><span class="toggle-slider"></span></label></div>

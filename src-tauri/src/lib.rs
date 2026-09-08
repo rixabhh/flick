@@ -85,6 +85,7 @@ pub fn run() {
             models::download_local_model,
             models::cancel_local_model_download,
             models::set_active_local_model,
+            models::active_local_model_capabilities,
             models::delete_local_model,
             history::get_history,
             history::copy_history_entry,

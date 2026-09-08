@@ -264,7 +264,65 @@ pub fn model_supports_translation(id: &str) -> Result<bool> {
     if custom_file_name(id).is_some() {
         return Ok(false);
     }
-    Ok(catalog_model(id)?.id.starts_with("whisper-"))
+    let model = catalog_model(id)?;
+    Ok(model.id.starts_with("whisper-") && !model.english_only)
+}
+
+// Kept alongside the pinned Parakeet artifact rather than inferred from a
+// display label. The model's language selector is not a promise that every
+// language is safe to send as a hint to every engine.
+const PARAKEET_V3_LANGUAGES: &[&str] = &[
+    "bg", "hr", "cs", "da", "nl", "en", "et", "fi", "fr", "de", "el", "hu", "it", "lv",
+    "lt", "mt", "pl", "pt", "ro", "sk", "sl", "es", "sv", "ru", "uk",
+];
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct LocalModelCapabilities {
+    pub id: String,
+    pub supports_translation: bool,
+    /// Empty means the catalog has no finite language restriction to present
+    /// (multilingual Whisper) or Flick cannot verify a custom model's set.
+    pub supported_languages: Vec<String>,
+}
+
+pub fn local_model_capabilities(id: &str) -> Result<LocalModelCapabilities> {
+    if custom_file_name(id).is_some() {
+        return Ok(LocalModelCapabilities {
+            id: id.to_string(),
+            supports_translation: false,
+            supported_languages: Vec::new(),
+        });
+    }
+    let model = catalog_model(id)?;
+    let supported_languages = if model.id == "parakeet-tdt-0.6b-v3-q8" {
+        PARAKEET_V3_LANGUAGES.iter().map(|language| (*language).to_string()).collect()
+    } else if model.english_only {
+        vec!["en".to_string()]
+    } else {
+        Vec::new()
+    };
+    Ok(LocalModelCapabilities {
+        id: id.to_string(),
+        supports_translation: model_supports_translation(id)?,
+        supported_languages,
+    })
+}
+
+pub fn model_supports_language(id: &str, language: &str) -> Result<bool> {
+    if language == "auto" {
+        return Ok(true);
+    }
+    let capabilities = local_model_capabilities(id)?;
+    Ok(capabilities.supported_languages.is_empty()
+        || capabilities.supported_languages.iter().any(|supported| supported == language))
+}
+
+#[tauri::command]
+pub async fn active_local_model_capabilities(
+    app: AppHandle,
+) -> Result<LocalModelCapabilities, String> {
+    let config = crate::config::load_config(&app).map_err(|error| error.to_string())?;
+    local_model_capabilities(&config.dictation_model_id).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -357,6 +415,12 @@ pub async fn set_active_local_model(app: AppHandle, id: String) -> Result<(), St
     let mut config = crate::config::load_config(&app).map_err(|error| error.to_string())?;
     if custom_file_name(&id).is_none() {
         remember_verified_model(&mut config, &id).map_err(|error| error.to_string())?;
+    }
+    // A translation flag that worked with a previous Whisper model must never
+    // turn into a deferred failure after selecting Parakeet, an English-only
+    // Whisper model, or an unverified custom artifact.
+    if !model_supports_translation(&id).map_err(|error| error.to_string())? {
+        config.dictation_translate_to_english = false;
     }
     config.dictation_model_id = id;
     crate::config::save_config(&app, &config).map_err(|error| error.to_string())?;
@@ -677,6 +741,19 @@ mod tests {
         assert_eq!(custom_file_name("custom:dictation.bin"), Some("dictation.bin"));
         assert_eq!(custom_file_name("custom:dictation.onnx"), None);
         assert!(!model_supports_translation("custom:dictation.gguf").unwrap());
+    }
+
+    #[test]
+    fn model_capabilities_do_not_overstate_language_or_translation_support() {
+        let parakeet = local_model_capabilities("parakeet-tdt-0.6b-v3-q8").unwrap();
+        assert!(!parakeet.supports_translation);
+        assert!(parakeet.supported_languages.iter().any(|language| language == "es"));
+        assert!(!model_supports_language("parakeet-tdt-0.6b-v3-q8", "hi").unwrap());
+
+        assert!(!model_supports_translation("whisper-tiny-en").unwrap());
+        assert!(model_supports_language("whisper-tiny-en", "en").unwrap());
+        assert!(!model_supports_language("whisper-tiny-en", "fr").unwrap());
+        assert!(model_supports_translation("whisper-base-multilingual").unwrap());
     }
 
     #[tokio::test]
