@@ -28,3 +28,16 @@ test("primary settings sections work with keyboard navigation", async ({ page })
   await expect(page.getByRole("tab", { name: "Advanced", exact: true })).toBeFocused();
   await expect(page.getByRole("tab", { name: "Advanced", exact: true })).toHaveAttribute("aria-selected", "true");
 });
+
+test("dictation settings exposes a stable floating-pill placement choice", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("tab", { name: "Dictate", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Dictation", exact: true })).toBeVisible();
+
+  const placement = page.getByLabel("Floating pill position");
+  await expect(placement).toHaveValue("bottom-center");
+  await placement.selectOption("bottom-right");
+  await expect(placement).toHaveValue("bottom-right");
+  await expect(page.getByText("Used for both dictation and transformation status.")).toBeVisible();
+});
