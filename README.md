@@ -101,7 +101,7 @@ The recording overlay stays hidden by default on Linux because some X11/Wayland 
 - **Keychain-backed credentials:** API keys are not stored in the settings JSON file.
 - **Selection-only context:** No automatic OCR, screen capture, chat-history collection, or accessibility-tree scraping.
 - **Protected-target refusal:** Flick blocks known credential-manager apps and user exclusions. Windows also checks the native password-field flag without reading field contents.
-- **Safe insertion:** Dictation and replies verify the original target and restore text clipboard contents after paste transactions.
+- **Safe insertion:** Dictation, replies, and text transformations verify the original target and restore text clipboard contents after paste transactions. If a transformation finishes after focus changes, Flick refuses the paste and keeps the result available through **Copy last result** for the current session.
 - **Local deletion:** Clear history, retained recordings, downloaded models, and stored keys from Settings.
 - **No telemetry by default:** Diagnostics export is explicit and redacted; it excludes credentials, clipboard data, drafts, history contents, and prompts.
 
@@ -111,7 +111,7 @@ The recording overlay stays hidden by default on Linux because some X11/Wayland 
 | --- | --- | --- |
 | Reply composer | `Ctrl+Shift+Space` | `Cmd+Shift+Space` |
 | Dictation | `Ctrl+Space` | `Cmd+Space` |
-| Copy last local result | `Ctrl+Alt+C` | `Cmd+Alt+C` |
+| Copy last result | `Ctrl+Alt+C` | `Cmd+Alt+C` |
 | Paste as plain text | `Ctrl+Alt+V` | `Cmd+Alt+V` |
 
 Desktop environments and external hotkey tools can route a fixed action set to a running Flick instance:

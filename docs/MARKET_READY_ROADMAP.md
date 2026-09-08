@@ -105,6 +105,14 @@ as audit history and are not active workflows.
   transformation pills and a native-window UI pass: animated recording and
   processing states, accessible status/error states, keyboard-first reply
   controls, and reduced-motion behavior.
+- `7598f40`, `b22ca99`, and `24bb72e` made local dictation capability-aware:
+  model selection now clears invalid translation state, rejects unsupported
+  language hints before native inference, exposes the active model’s facts in
+  Settings, and presents those facts in the model chooser.
+- `93dc22c` and `46f5fa7` close the transform paste race: the original target
+  and protected-field state are rechecked after provider latency. A refused
+  paste never overwrites the newly focused app and leaves a session-only
+  recovery result for **Copy last result** without forcing persistent history.
 
 ## Architecture decision: provider-aware dictation
 
