@@ -76,6 +76,12 @@ pub struct FlickConfig {
     /// device.
     #[serde(default = "default_dictation_provider")]
     pub dictation_provider: String,
+    /// Base URL for the explicitly selected OpenAI-compatible transcription
+    /// provider. This never contains credentials.
+    #[serde(default = "default_dictation_cloud_base_url")]
+    pub dictation_cloud_base_url: String,
+    #[serde(default = "default_dictation_cloud_model")]
+    pub dictation_cloud_model: String,
     #[serde(default = "default_dictation_language")]
     pub dictation_language: String,
     #[serde(default)]
@@ -105,7 +111,7 @@ pub struct FlickConfig {
 }
 
 fn default_config_version() -> u32 {
-    3
+    4
 }
 fn default_theme() -> String {
     "system".to_string()
@@ -154,6 +160,12 @@ fn default_dictation_model_id() -> String {
 fn default_dictation_provider() -> String {
     crate::dictation_provider::LOCAL_WHISPER_PROVIDER_ID.to_string()
 }
+fn default_dictation_cloud_base_url() -> String {
+    "https://api.openai.com/v1".to_string()
+}
+fn default_dictation_cloud_model() -> String {
+    "gpt-4o-mini-transcribe".to_string()
+}
 fn default_dictation_language() -> String {
     "en".to_string()
 }
@@ -170,7 +182,7 @@ fn default_recording_retention_count() -> usize {
 impl Default for FlickConfig {
     fn default() -> Self {
         Self {
-            version: 3,
+            version: 4,
             enabled: true,
             launch_at_login: false,
             show_done_toast: true,
@@ -189,6 +201,8 @@ impl Default for FlickConfig {
             dictation_device_id: String::new(),
             dictation_model_id: default_dictation_model_id(),
             dictation_provider: default_dictation_provider(),
+            dictation_cloud_base_url: default_dictation_cloud_base_url(),
+            dictation_cloud_model: default_dictation_cloud_model(),
             dictation_language: default_dictation_language(),
             dictation_translate_to_english: false,
             dictation_filler_cleanup: true,
@@ -242,10 +256,18 @@ pub fn load_config(app: &AppHandle) -> Result<FlickConfig> {
 fn migrate_config(mut config: FlickConfig) -> (FlickConfig, bool) {
     // Flick 1.x command entries did not have stable IDs. Fill them on load so
     // callers can stop relying on array positions without breaking old users.
-    let mut migrated = config.version < 3;
-    config.version = 3;
+    let mut migrated = config.version < 4;
+    config.version = 4;
     if config.dictation_provider.trim().is_empty() {
         config.dictation_provider = default_dictation_provider();
+        migrated = true;
+    }
+    if config.dictation_cloud_base_url.trim().is_empty() {
+        config.dictation_cloud_base_url = default_dictation_cloud_base_url();
+        migrated = true;
+    }
+    if config.dictation_cloud_model.trim().is_empty() {
+        config.dictation_cloud_model = default_dictation_cloud_model();
         migrated = true;
     }
     for command in &mut config.custom_commands {
@@ -288,6 +310,7 @@ mod tests {
         assert_eq!(config.model, "gemini-2.5-flash-lite");
         assert_eq!(config.dictation_model_id, "whisper-tiny-en");
         assert_eq!(config.dictation_provider, "local-whisper");
+        assert_eq!(config.dictation_cloud_base_url, "https://api.openai.com/v1");
         assert!(config.custom_commands.is_empty());
     }
 
@@ -353,7 +376,7 @@ mod tests {
 
         let (migrated, changed) = migrate_config(legacy);
         assert!(changed);
-        assert_eq!(migrated.version, 3);
+        assert_eq!(migrated.version, 4);
         assert!(!migrated.enabled);
         assert!(migrated.launch_at_login);
         assert!(!migrated.show_done_toast);
@@ -361,6 +384,7 @@ mod tests {
         assert_eq!(migrated.model, "openai/gpt-4o-mini");
         assert_eq!(migrated.custom_commands[0].id, "cmd-tldr");
         assert_eq!(migrated.dictation_provider, "local-whisper");
+        assert_eq!(migrated.dictation_cloud_model, "gpt-4o-mini-transcribe");
     }
 
     #[test]

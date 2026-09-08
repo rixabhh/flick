@@ -511,22 +511,18 @@ async fn stop_and_transcribe_inner(app: &AppHandle) -> Result<String> {
         None
     };
     show_overlay(app, "transcribing");
-    let language = settings.dictation_language.clone();
-    let translate = settings.dictation_translate_to_english;
-    let provider_id = settings.dictation_provider.clone();
-    let text = tokio::task::spawn_blocking(move || {
-        crate::dictation_provider::transcribe(
-            &provider_id,
-            crate::dictation_provider::TranscriptionRequest {
-                audio: &audio,
-                language: &language,
-                translate_to_english: translate,
-                local_model_path: path.as_deref(),
-            },
-        )
-    })
-        .await
-        .context("Transcription task failed")??;
+    let text = crate::dictation_provider::transcribe(
+        settings.dictation_provider.clone(),
+        crate::dictation_provider::TranscriptionRequest {
+            audio,
+            language: settings.dictation_language.clone(),
+            translate_to_english: settings.dictation_translate_to_english,
+            local_model_path: path,
+        },
+        settings.dictation_cloud_base_url.clone(),
+        settings.dictation_cloud_model.clone(),
+    )
+    .await?;
     if text.trim().is_empty() {
         bail!("No speech was detected.");
     }
@@ -793,15 +789,11 @@ mod tests {
             .map(|sample| sample.expect("wav sample") as f32 / i16::MAX as f32)
             .collect();
         let audio = resample(&samples, spec.channels as usize, spec.sample_rate);
-        let text =
-        crate::dictation_provider::transcribe(
-            crate::dictation_provider::LOCAL_WHISPER_PROVIDER_ID,
-            crate::dictation_provider::TranscriptionRequest {
-                audio: &audio,
-                language: "en",
-                translate_to_english: false,
-                local_model_path: Some(std::path::Path::new(&model)),
-            },
+        let text = crate::dictation_provider::transcribe_local_whisper(
+            &audio,
+            "en",
+            false,
+            std::path::Path::new(&model),
         )
         .expect("transcribe");
         assert!(

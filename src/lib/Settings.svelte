@@ -31,6 +31,9 @@
     dictation_mode: "hold-or-toggle",
     dictation_device_id: "",
     dictation_model_id: "whisper-tiny-en",
+    dictation_provider: "local-whisper",
+    dictation_cloud_base_url: "https://api.openai.com/v1",
+    dictation_cloud_model: "gpt-4o-mini-transcribe",
     dictation_language: "en",
     dictation_translate_to_english: false,
     dictation_filler_cleanup: true,
@@ -51,6 +54,7 @@
   let inputDevices = $state([]);
   let inputLevel = $state(0);
   let dictationRuntime = $state(null);
+  let dictationProviders = $state([]);
   let diagnosticsPath = $state("");
   let keyRemovalMessage = $state("");
   let recordingDeletionMessage = $state("");
@@ -115,6 +119,11 @@
     catch (error) { console.error("Failed to read dictation runtime:", error); }
   }
 
+  async function refreshDictationProviders() {
+    try { dictationProviders = await invoke("list_dictation_providers"); }
+    catch (error) { console.error("Failed to list dictation providers:", error); }
+  }
+
   function saveCorrections(value) {
     updateConfig("dictation_corrections", parseCorrections(value));
   }
@@ -152,6 +161,12 @@
     if (!confirm("Remove the stored API key from your operating system keychain?")) return;
     try { await invoke("delete_api_key", { provider: config.provider }); keyRemovalMessage = "Stored API key removed."; }
     catch (error) { keyRemovalMessage = `Could not remove key: ${error}`; }
+  }
+
+  async function removeDictationCloudApiKey() {
+    if (!confirm("Remove the cloud dictation API key from your operating system keychain?")) return;
+    try { await invoke("delete_api_key", { provider: "dictation-openai-compatible" }); keyRemovalMessage = "Cloud dictation API key removed."; }
+    catch (error) { keyRemovalMessage = `Could not remove cloud dictation key: ${error}`; }
   }
 
   async function removeRecordings() {
@@ -199,6 +214,7 @@
         applyTheme(config.theme);
         applyLanguage(config.app_language);
         refreshDictationRuntime();
+        refreshDictationProviders();
 
         try {
           const autostartEnabled = await isEnabled();
@@ -227,6 +243,17 @@
       await invoke("save_config", { config });
     } catch (e) {
       console.error("Failed to save config:", e);
+    }
+  }
+
+  async function handleDictationProviderChange() {
+    if (config.dictation_provider !== "local-whisper") {
+      config.dictation_translate_to_english = false;
+    }
+    try {
+      await invoke("save_config", { config });
+    } catch (e) {
+      console.error("Failed to save dictation provider:", e);
     }
   }
 
@@ -453,22 +480,29 @@
     {:else if activeTab === "dictate"}
       <div class="panel-section animate-fade-in">
         <div class="section-header"><h2 class="section-title">Dictation</h2></div>
-        <p class="section-desc">Configure the local speech workflow. Audio and transcript handling remain on this device.</p>
+        <p class="section-desc">Choose where speech is transcribed. Local Whisper is private by default; cloud mode is explicit and opt-in.</p>
+        <label class="setting-field"><span>Transcription provider</span><select bind:value={config.dictation_provider} onchange={handleDictationProviderChange}>{#each dictationProviders as provider}<option value={provider.id}>{provider.label}</option>{/each}</select></label>
+        {#if config.dictation_provider === "cloud-openai-compatible"}
+          <div class="panel quick-card"><strong>Cloud audio disclosure</strong><span class="text-secondary">Each dictated recording is uploaded to the endpoint below for transcription. Flick does not retain a recording unless you explicitly enable retained recordings.</span></div>
+          <label class="setting-field"><span>Cloud endpoint</span><input type="url" bind:value={config.dictation_cloud_base_url} onblur={() => updateConfig("dictation_cloud_base_url", config.dictation_cloud_base_url)} placeholder="https://api.openai.com/v1" /><small>OpenAI-compatible endpoint. HTTPS is required except for localhost.</small></label>
+          <label class="setting-field"><span>Cloud model</span><input type="text" bind:value={config.dictation_cloud_model} onblur={() => updateConfig("dictation_cloud_model", config.dictation_cloud_model)} placeholder="gpt-4o-mini-transcribe" /><small>This provider calls <span class="mono">/audio/transcriptions</span>.</small></label>
+          <ApiKeyInput provider="dictation-openai-compatible" model={config.dictation_cloud_model} customBaseUrl={config.dictation_cloud_base_url} showTest={false} providerLabel="cloud transcription" apiKeyUrl="https://platform.openai.com/api-keys" />
+        {/if}
         <label class="setting-field"><span>Dictation shortcut</span><input type="text" bind:value={config.dictation_shortcut} onblur={() => updateConfig("dictation_shortcut", config.dictation_shortcut)} /></label>
         <label class="setting-field"><span>Activation</span><select bind:value={config.dictation_mode} onchange={() => updateConfig("dictation_mode", config.dictation_mode)}><option value="hold-or-toggle">Hold or toggle</option><option value="push-to-talk">Push to talk</option><option value="toggle">Toggle</option></select></label>
         <label class="setting-field"><span>Microphone</span><select bind:value={config.dictation_device_id} onchange={() => updateConfig("dictation_device_id", config.dictation_device_id)}><option value="">System default</option>{#each inputDevices as device}<option value={device.id}>{device.name}{device.is_default ? " (default)" : ""}</option>{/each}</select></label>
         <label class="setting-field"><span>Spoken language</span><select bind:value={config.dictation_language} onchange={() => updateConfig("dictation_language", config.dictation_language)}><option value="en">English</option><option value="es">Spanish</option><option value="hi">Hindi</option><option value="fr">French</option><option value="de">German</option><option value="auto">Detect automatically</option></select></label>
-        <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Translate speech to English</span><span class="toggle-label-desc">Requires the multilingual model</span></div><label class="toggle"><input type="checkbox" checked={config.dictation_translate_to_english} onchange={() => updateConfig("dictation_translate_to_english", !config.dictation_translate_to_english)} /><span class="toggle-slider"></span></label></div>
+        {#if config.dictation_provider === "local-whisper"}<div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Translate speech to English</span><span class="toggle-label-desc">Requires the multilingual model</span></div><label class="toggle"><input type="checkbox" checked={config.dictation_translate_to_english} onchange={() => updateConfig("dictation_translate_to_english", !config.dictation_translate_to_english)} /><span class="toggle-slider"></span></label></div>{:else}<div class="panel quick-card"><strong>Translation is unavailable in cloud mode</strong><span class="text-secondary">Compatible transcription APIs vary by model. Flick will not make a translation claim it cannot verify.</span></div>{/if}
         <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Remove common filler words</span><span class="toggle-label-desc">Locally removes um, uh, erm, and ah from final text</span></div><label class="toggle"><input type="checkbox" checked={config.dictation_filler_cleanup} onchange={() => updateConfig("dictation_filler_cleanup", !config.dictation_filler_cleanup)} /><span class="toggle-slider"></span></label></div>
         <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">AI cleanup after transcription</span><span class="toggle-label-desc">Off by default. Sends only the finished transcript to your configured provider; audio stays local.</span></div><label class="toggle"><input type="checkbox" checked={config.dictation_llm_post_process} onchange={() => updateConfig("dictation_llm_post_process", !config.dictation_llm_post_process)} /><span class="toggle-slider"></span></label></div>
         <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Keep local recording files</span><span class="toggle-label-desc">Off by default. Saves a local WAV after dictation for review.</span></div><label class="toggle"><input type="checkbox" checked={config.retain_recordings} onchange={() => updateConfig("retain_recordings", !config.retain_recordings)} /><span class="toggle-slider"></span></label></div>
         {#if config.retain_recordings}<label class="setting-field"><span>Recording retention</span><select bind:value={config.recording_retention_count} onchange={() => updateConfig("recording_retention_count", Number(config.recording_retention_count))}><option value={5}>5 recordings</option><option value={20}>20 recordings</option><option value={50}>50 recordings</option></select></label>{/if}
         <label class="setting-field"><span>Personal corrections</span><textarea value={formatCorrections(config.dictation_corrections)} onblur={(event) => saveCorrections(event.currentTarget.value)} placeholder="Acme => ACME&#10;Jon => John"></textarea><small>One replacement per line: <span class="mono">find =&gt; replacement</span></small></label>
         <div class="microphone-tools"><button class="btn btn-secondary" onclick={refreshInputDevices}>Refresh microphones</button><button class="btn btn-secondary" onclick={refreshInputLevel}>Test microphone</button><div class="input-level" aria-label="Measured microphone input level"><span style={`width: ${Math.min(100, inputLevel * 100)}%`}></span></div></div>
-        {#if dictationRuntime}<div class="panel quick-card"><strong>Local runtime: {dictationRuntime.acceleration}</strong><span class="text-secondary">{dictationRuntime.details}</span><button class="btn btn-secondary btn-sm" onclick={refreshDictationRuntime}>Refresh runtime</button></div>{/if}
+        {#if config.dictation_provider === "local-whisper" && dictationRuntime}<div class="panel quick-card"><strong>Local runtime: {dictationRuntime.acceleration}</strong><span class="text-secondary">{dictationRuntime.details}</span><button class="btn btn-secondary btn-sm" onclick={refreshDictationRuntime}>Refresh runtime</button></div>{/if}
         <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Add trailing space</span><span class="toggle-label-desc">Add a space after a pasted transcript</span></div><label class="toggle"><input type="checkbox" checked={config.append_trailing_space} onchange={() => updateConfig("append_trailing_space", !config.append_trailing_space)} /><span class="toggle-slider"></span></label></div>
         <label class="setting-field"><span>Auto-submit after dictation</span><input type="text" value={config.auto_submit_apps.join(", ")} onblur={(event) => updateConfig("auto_submit_apps", event.currentTarget.value.split(",").map((value) => value.trim()).filter(Boolean))} placeholder="Optional app names, comma-separated" /><small>Off by default. Flick presses Enter only after a successful paste into one of these apps.</small></label>
-        <div class="panel quick-card"><strong>Local models</strong><span class="text-secondary">Install a verified speech model from the Models section once the selected engine is available for this platform.</span></div>
+        {#if config.dictation_provider === "local-whisper"}<div class="panel quick-card"><strong>Local models</strong><span class="text-secondary">Install a verified speech model from the Models section once the selected engine is available for this platform.</span></div>{/if}
       </div>
     {:else if activeTab === "models"}
       <div class="panel-section animate-fade-in"><Models /></div>
@@ -480,6 +514,7 @@
         <div class="panel quick-card"><strong>Reply context is explicit</strong><span class="text-secondary">Flick uses only selected or manually supplied context. Drafts and context are not persisted.</span></div>
         <div class="panel quick-card"><strong>Protected targets</strong><span class="text-secondary">Flick refuses actions in recognized dedicated credential-manager apps and honors your app exclusion list. On Windows, it also checks the focused control’s native password flag. It never reads password-field contents.</span></div>
         <div class="panel quick-card"><strong>Provider credential</strong><span class="text-secondary">Your API key is kept in the operating system keychain, not Flick’s settings file.</span><button class="btn btn-secondary" onclick={removeApiKey}>Remove stored API key</button>{#if keyRemovalMessage}<small>{keyRemovalMessage}</small>{/if}</div>
+        <div class="panel quick-card"><strong>Cloud dictation credential</strong><span class="text-secondary">This separate key is used only when you explicitly select cloud transcription.</span><button class="btn btn-secondary" onclick={removeDictationCloudApiKey}>Remove cloud dictation API key</button></div>
         <div class="panel quick-card"><strong>Retained recordings</strong><span class="text-secondary">Deletes only the opt-in local WAV files captured by Flick; transcript history is unaffected.</span><button class="btn btn-secondary" onclick={removeRecordings}>Delete retained recordings</button>{#if recordingDeletionMessage}<small>{recordingDeletionMessage}</small>{/if}</div>
         <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Keep local activity history</span><span class="toggle-label-desc">Controls future transcript and action history.</span></div><label class="toggle"><input type="checkbox" checked={config.history_enabled} onchange={() => updateConfig("history_enabled", !config.history_enabled)} /><span class="toggle-slider"></span></label></div>
         <label class="setting-field"><span>Unsaved history limit</span><select bind:value={config.history_limit} onchange={() => updateConfig("history_limit", Number(config.history_limit))}><option value={25}>25 items</option><option value={100}>100 items</option><option value={500}>500 items</option></select></label>

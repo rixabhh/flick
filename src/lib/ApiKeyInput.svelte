@@ -2,7 +2,14 @@
   import { invoke } from "@tauri-apps/api/core";
   import { openUrl } from "@tauri-apps/plugin-opener";
 
-  let { provider = "gemini", model = "gemini-2.5-flash-lite", customBaseUrl = "" } = $props();
+  let {
+    provider = "gemini",
+    model = "gemini-2.5-flash-lite",
+    customBaseUrl = "",
+    showTest = true,
+    providerLabel = "",
+    apiKeyUrl = "",
+  } = $props();
 
   let apiKey = $state("");
   let masked = $state(true);
@@ -81,6 +88,7 @@
   }
 
   function providerName() {
+    if (providerLabel) return providerLabel;
     if (provider === "openrouter") return "OpenRouter";
     if (provider === "custom") return "OpenAI-compatible endpoint";
     return "Gemini";
@@ -91,6 +99,7 @@
   }
 
   function keyLink() {
+    if (apiKeyUrl) return apiKeyUrl;
     if (provider === "custom") return "";
     return provider === "openrouter"
       ? "https://openrouter.ai/settings/keys"
@@ -152,7 +161,7 @@
         Save Key
       {/if}
     </button>
-    <button
+    {#if showTest}<button
       class="btn btn-secondary btn-sm"
       onclick={testConnection}
       disabled={testing || (provider !== "custom" && !apiKey.trim()) || (provider === "custom" && !customBaseUrl.trim())}
@@ -162,7 +171,7 @@
       {:else}
         Test Connection
       {/if}
-    </button>
+    </button>{/if}
   </div>
 
   {#if testResult}
