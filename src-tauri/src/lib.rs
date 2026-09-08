@@ -369,6 +369,10 @@ fn run_hook_loop(app: AppHandle) {
                                 .await
                                 {
                                     log::error!("Custom replacement failed: {}", e);
+                                    let _ = app_clone.emit(
+                                        "flick://error",
+                                        serde_json::json!({"message": format!("Text transform failed: {e}")}),
+                                    );
                                 }
                             });
                         } else {
@@ -391,6 +395,10 @@ fn run_hook_loop(app: AppHandle) {
                             .await
                             {
                                 log::error!("Replacement failed: {}", e);
+                                let _ = app_clone.emit(
+                                    "flick://error",
+                                    serde_json::json!({"message": format!("Text transform failed: {e}")}),
+                                );
                             }
                         });
                     }

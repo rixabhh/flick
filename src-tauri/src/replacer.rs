@@ -151,9 +151,12 @@ pub async fn execute_replacement(
     // Step 11: Restore original clipboard content
     restore_clipboard(&original_clipboard);
 
-    // Step 12: Dismiss toast / show done
+    // Step 12: Always end the progress state. A disabled completion toast must
+    // not leave the "Transforming" indicator on screen indefinitely.
     if show_done_toast {
         let _ = app.emit("flick://done", ());
+    } else {
+        let _ = app.emit("flick://transform-finished", ());
     }
 
     log::info!(
@@ -272,9 +275,11 @@ pub async fn execute_custom_replacement(
     // Step 11: Restore clipboard
     restore_clipboard(&original_clipboard);
 
-    // Step 12: Done
+    // Step 12: Always end the progress state; success confirmation is optional.
     if show_done_toast {
         let _ = app.emit("flick://done", ());
+    } else {
+        let _ = app.emit("flick://transform-finished", ());
     }
 
     log::info!(

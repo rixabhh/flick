@@ -33,10 +33,17 @@
       }, 2000);
     });
 
+    const unlisten4 = listen("flick://transform-finished", () => {
+      clearTimers();
+      state = "idle";
+      hideWindow();
+    });
+
     return () => {
       unlisten1.then(f => f());
       unlisten2.then(f => f());
       unlisten3.then(f => f());
+      unlisten4.then(f => f());
       clearTimers();
     };
   });
