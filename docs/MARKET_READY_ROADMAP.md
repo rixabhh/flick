@@ -50,7 +50,8 @@ trust Flick with sensitive daily communication.
   real microphone, real speech fixtures by default, paste reliability in real
   target applications, interrupted model downloads, network failure recovery,
   or accessibility keyboard journeys across the native windows.
-- The working copy is clean at `440ae95`; no GitHub issues or releases exist.
+- The work now continues directly on `main`; no separate development branch is
+  used. No GitHub issues or releases exist.
   This means there is no external defect triage, crash signal, beta cohort,
   or published installer evidence to use as a release decision.
 
@@ -70,6 +71,25 @@ the same browser/native matrix. Earlier Verify cancellations are expected from
 its `cancel-in-progress` concurrency policy, not test failures. Release
 success has not yet produced a published GitHub release; the workflow creates
 draft prereleases only when invoked for a tag.
+
+Workflow topology is intentionally limited to three active workflows: **Verify**
+for pushes and pull requests on `main`, **Release** for tags/manual packaging,
+and GitHub's managed **pages-build-deployment** workflow. The former duplicate
+checked-in Pages workflow was removed. Historical runs remain visible in GitHub
+as audit history and are not active workflows.
+
+### Progress since the baseline
+
+- `ee7648a` introduced the provider contract while preserving Local Whisper as
+  the private default.
+- `f3f5280` added the first opt-in cloud provider: an OpenAI-compatible
+  `/audio/transcriptions` transport with a separate keychain credential,
+  HTTPS-only endpoints (except localhost), a 90-second timeout, WAV encoding,
+  a visible audio-upload disclosure, and no silent provider fallback. Its
+  cross-platform verification run is in progress.
+- The next local-model milestone is still a real engine addition, not a UI
+  label: Parakeet V3 needs Handy's pinned Hugging Face GGUF catalog and the
+  compatible native runtime before it can be offered safely.
 
 ## Architecture decision: provider-aware dictation
 
@@ -102,8 +122,8 @@ the default and must never silently route audio to a cloud service.
 ## Implementation sequence and commits
 
 Each commit must be independently buildable, have focused tests, use
-`rixabhh <rishabh0singh0@gmail.com>` as its author, and be pushed to the
-`codex/market-ready-foundation` branch for review.
+`rixabhh <rishabh0singh0@gmail.com>` as its author, and be pushed directly to
+`main`.
 
 1. `docs: add market-ready audit and delivery roadmap`
    - This document, CI evidence, scope, release criteria, and commit plan.
@@ -116,11 +136,20 @@ Each commit must be independently buildable, have focused tests, use
    - Add state-machine tests for idle, recording, processing, cancelling,
      error, and target-change paste fallback.
 
-3. `feat(dictation): add verified local ONNX model support`
+3. `feat(dictation): add opt-in cloud transcription providers`
+   - The initial OpenAI-compatible transport is implemented in `f3f5280`.
+     Complete it with a non-billable connection check where supported,
+     request-size limits, cancellation, redacted diagnostics, and mock-server
+     integration coverage for success, auth failure, malformed response,
+     timeout, and no-unintended-retry.
+   - Support OpenRouter only when its STT route and response contract are
+     confirmed.
+
+4. `feat(dictation): add verified local Parakeet support`
    - Port the minimal proven Handy model descriptor approach: engine type,
      Hugging Face source with pinned revision, artifact format, capabilities,
      checksums, download status, and compatibility checks.
-   - Ship Parakeet as the first ONNX provider; add Moonshine/SenseVoice only
+   - Ship Parakeet V3 as the first additional local provider; add Moonshine/SenseVoice only
      after their fixtures, licensing, memory budget, and platform packages are
      verified.
    - Use Hugging Face Hub cache discovery so already-downloaded eligible models
@@ -128,15 +157,6 @@ Each commit must be independently buildable, have focused tests, use
      checksum-verified, atomic downloads; use a verified mirror only after an
      explicit Hub failure; add model load/unload and incompatible-language
      tests.
-
-4. `feat(dictation): add opt-in cloud transcription providers`
-   - Add a provider registry, secure per-provider credentials, connection
-     test, model discovery/cache, timeout/retry classification, cancellation,
-     request-size limits, and redacted diagnostics.
-   - Implement OpenAI-compatible `/audio/transcriptions` first; support
-     OpenRouter only when its STT route and response contract are confirmed.
-   - Add local mock-server integration tests for success, auth failure,
-     malformed response, timeout, cancellation, and no-unintended-retry.
 
 5. `feat(dictation): make model choice and recording recovery product-grade`
    - Replace the flat model list with Local/Cloud choices, recommended presets,
