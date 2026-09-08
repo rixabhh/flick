@@ -28,17 +28,21 @@ trust Flick with sensitive daily communication.
   diagnostics export.
 - A selected-text reply composer with editable context and draft, tone,
   explicit Copy/Insert actions, a target-change guard, and localization.
-- Offline dictation with microphone selection, hold/push/toggle triggers,
-  adaptive VAD, Whisper local inference, filler cleanup, personal corrections,
-  recording retention, optional text-only LLM cleanup, and safe paste-back.
-- Verified/resumable/atomic Whisper model downloads, custom `.bin` discovery,
-  and test coverage for model/download and text-processing behavior.
+- Dictation with microphone selection, hold/push/toggle triggers, adaptive VAD,
+  local Whisper/Parakeet inference, an explicit OpenAI-compatible cloud path,
+  filler cleanup, personal corrections, recording retention, optional
+  text-only LLM cleanup, and safe paste-back.
+- Verified/resumable/atomic Hugging Face model downloads, Whisper `.bin` and
+  GGUF discovery, and test coverage for model/download and text-processing
+  behavior.
 - Browser smoke tests and native verification on all five current CI targets.
 
 ### Current constraints and risks
 
-- Dictation is coupled to `whisper-rs`, `ggml` `.bin` files, and one local
-  engine. It cannot load ONNX model families or use a cloud STT endpoint.
+- The initial local engine now accepts Whisper GGML and compatible GGUF
+  artifacts, including Parakeet V3. It does not yet support ONNX families,
+  Hugging Face cache discovery, user-visible hardware/resource guidance, or
+  a tested cancellation path for cloud requests.
 - The model page presents a flat list, while the dictation settings describe
   engine availability that does not exist. It does not help a user choose for
   speed, language, privacy, RAM, quality, or connection status.
@@ -86,10 +90,21 @@ as audit history and are not active workflows.
   `/audio/transcriptions` transport with a separate keychain credential,
   HTTPS-only endpoints (except localhost), a 90-second timeout, WAV encoding,
   a visible audio-upload disclosure, and no silent provider fallback. Its
-  cross-platform verification run is in progress.
-- The next local-model milestone is still a real engine addition, not a UI
-  label: Parakeet V3 needs Handy's pinned Hugging Face GGUF catalog and the
-  compatible native runtime before it can be offered safely.
+  cross-platform verification is the release gate for this implementation.
+- `b0d7a22` added Parakeet TDT 0.6B v3 as a pinned, checksum-verified GGUF
+  catalog item from Hugging Face and switched the local runtime to a model
+  engine that supports both existing Whisper artifacts and compatible GGUF.
+  Translation remains intentionally unavailable for Parakeet rather than
+  making an unsupported capability claim.
+- `5a7cf23` fixed reply-context capture so the composer hides before the
+  operating-system selection is read; it no longer captures its own textarea.
+- `07d7196` completed transform lifecycle signalling so a disabled completion
+  toast does not leave a permanent “Transforming” status and provider failures
+  surface to the user.
+- `f183e7e` added a shared, user-controlled position for dictation and
+  transformation pills and a native-window UI pass: animated recording and
+  processing states, accessible status/error states, keyboard-first reply
+  controls, and reduced-motion behavior.
 
 ## Architecture decision: provider-aware dictation
 

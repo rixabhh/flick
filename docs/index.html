@@ -3,261 +3,100 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta
-      name="description"
-      content="Flick is a local-first desktop writing assistant with global AI commands, offline dictation, and a privacy-first reply composer."
-    />
-    <meta property="og:title" content="Flick - Write, dictate, and reply anywhere." />
-    <meta
-      property="og:description"
-      content="Global writing commands, offline local dictation, and deliberate AI reply drafting for desktop."
-    />
+    <meta name="description" content="Flick is a local-first desktop writing assistant: transform text, dictate with the model you choose, and draft intentional replies without leaving your flow." />
+    <meta property="og:title" content="Flick — writing help that stays in your flow." />
+    <meta property="og:description" content="Transform text, dictate locally or with your own cloud provider, and draft better replies from a deliberate selection." />
     <meta property="og:type" content="website" />
-    <meta name="theme-color" content="#050505" />
-    <title>Flick - Write, dictate, and reply anywhere.</title>
+    <meta name="theme-color" content="#0a0b10" />
+    <title>Flick — writing help that stays in your flow.</title>
     <link rel="icon" type="image/png" href="./assets/flick-logo.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap"
-      rel="stylesheet"
-    />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="page-shell">
       <header class="site-header" data-reveal>
-        <a class="brand" href="#top" aria-label="Flick home">
-          <img src="./assets/flick-logo.png" alt="" />
-          <span>Flick</span>
-        </a>
+        <a class="brand" href="#top" aria-label="Flick home"><img src="./assets/flick-logo.png" alt="" /><span>Flick</span></a>
         <nav class="nav-links" aria-label="Primary navigation">
-          <a href="#commands">Commands</a>
-          <a href="#dictation">Dictation</a>
-          <a href="#guide">Guide</a>
-          <a href="#privacy">Privacy</a>
-          <a href="#download">Download</a>
+          <a href="#workflows">Workflows</a><a href="#models">Models</a><a href="#privacy">Privacy</a><a href="#download">Download</a>
         </nav>
-        <a class="header-action" href="https://github.com/rixabhh/flick">GitHub</a>
+        <a class="header-action" href="https://github.com/rixabhh/flick">View on GitHub <span>↗</span></a>
       </header>
 
       <main id="top">
         <section class="hero">
           <div class="hero-copy" data-reveal>
-            <p class="eyebrow">Local-first writing assistance for desktop</p>
-            <h1>Flick</h1>
-            <p class="tagline">Write. Dictate. Reply.</p>
-            <p class="hero-text">
-              Use global writing commands, dictate fully offline, and turn an
-              explicit conversation selection into an editable reply. Flick
-              stays out of your way until you ask for help.
-            </p>
+            <p class="eyebrow"><span></span> Local-first desktop writing</p>
+            <h1>Writing help,<br /><em>wherever</em> you work.</h1>
+            <p class="hero-text">Flick brings text transformations, intentional reply drafting, and flexible dictation to the app already in front of you. No new editor. No forced cloud.</p>
             <div class="hero-actions">
-              <a class="button primary" href="https://github.com/rixabhh/flick/releases/latest">
-                Download latest
-              </a>
-              <a class="button secondary" href="https://github.com/rixabhh/flick">
-                View source
-              </a>
+              <a class="button primary" href="https://github.com/rixabhh/flick/releases/latest">Download Flick <span>↓</span></a>
+              <a class="button secondary" href="#workflows">See how it works <span>↓</span></a>
             </div>
+            <p class="platform-note">For Windows, macOS, and Linux <i></i> Open source</p>
           </div>
 
-          <div class="hero-visual" data-reveal>
-            <div class="desktop-window" aria-label="Flick text transformation preview">
-              <div class="window-chrome">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-              <div class="editor-preview">
-                <p class="muted-line">Message</p>
-                <div class="text-line active">
-                  this needs to sound sharper for launch<span class="trigger">!fix</span>
-                </div>
-                <div class="transform-chip">
-                  <span class="spinner"></span>
-                  <span>Transforming</span>
-                </div>
-                <div class="text-line result">
-                  Let’s make this launch message sharper, clearer, and ready to send.
-                </div>
-              </div>
+          <div class="hero-stage" data-reveal aria-label="Flick in use">
+            <div class="orb orb-one"></div><div class="orb orb-two"></div>
+            <div class="desktop-window">
+              <div class="window-bar"><div class="traffic"><i></i><i></i><i></i></div><span>Message</span><b>•••</b></div>
+              <div class="editor"><span class="editor-label">To: Product team</span><p>the update is looking good but we need to make it sound more confident <code>!fix</code></p><div class="transform-pill"><span class="spin"></span><span><strong>Transforming</strong><small>Making your text clearer</small></span></div><p class="result">The update is looking strong. Let’s make the final details feel just as confident.</p></div>
             </div>
+            <div class="dictation-pill"><span class="wave"><i></i><i></i><i></i><i></i><i></i></span><span><strong>Listening</strong><small><b></b> Audio stays local</small></span></div>
+            <div class="reply-preview"><span class="reply-icon">↗</span><span><small>FLICK REPLY</small><strong>Draft a thoughtful reply</strong></span><b>⌘ ↵</b></div>
           </div>
         </section>
 
-        <section class="metrics" aria-label="Flick highlights" data-reveal>
-          <div>
-            <strong>9</strong>
-            <span>built-in commands</span>
-          </div>
-          <div>
-            <strong>100%</strong>
-            <span>offline speech option</span>
-          </div>
-          <div>
-            <strong>3</strong>
-            <span>provider paths</span>
+        <section class="trust-row" data-reveal aria-label="Flick principles">
+          <div><span>01</span><strong>Works in the apps you already use.</strong></div>
+          <div><span>02</span><strong>Your keys and models, your choice.</strong></div>
+          <div><span>03</span><strong>Review before anything is inserted.</strong></div>
+        </section>
+
+        <section id="workflows" class="intro section" data-reveal>
+          <p class="eyebrow">One app, three useful moments</p>
+          <h2>Less friction between a thought<br />and the words you send.</h2>
+          <p>Flick is deliberately small at the moment you need it, then gets out of the way. Each workflow makes a single promise: help without taking control.</p>
+        </section>
+
+        <section class="workflow write-workflow">
+          <div class="workflow-copy" data-reveal><p class="eyebrow">01 — Write</p><h2>Clean up a thought in place.</h2><p>Type naturally, add a trigger, and get a refined version back in the text field you started with.</p><a class="text-link" href="https://github.com/rixabhh/flick#write-with-commands">Explore text commands <span>→</span></a></div>
+          <div class="workflow-card command-card" data-reveal><div class="card-caption"><span>Anywhere you can type</span><b>⌘</b></div><div class="message-line">could you send the final notes by tonight <code>!formal</code></div><div class="mini-status"><span class="spin"></span> Refining your text</div><div class="message-line polished">Could you please send the final notes by the end of today?</div></div>
+        </section>
+
+        <section class="workflow dictate-workflow">
+          <div class="workflow-card voice-card" data-reveal><div class="voice-top"><span>Dictation</span><b>Local model</b></div><div class="voice-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="voice-bottom"><span><i></i> Recording safely</span><b>Esc to discard</b></div></div>
+          <div class="workflow-copy" data-reveal><p class="eyebrow">02 — Dictate</p><h2>Say it out loud. Keep control.</h2><p>Choose an offline model for private on-device transcription, or explicitly configure a cloud transcription provider with your own API key.</p><a class="text-link" href="#models">Explore dictation models <span>→</span></a></div>
+        </section>
+
+        <section class="workflow reply-workflow">
+          <div class="workflow-copy" data-reveal><p class="eyebrow">03 — Reply</p><h2>Good replies start with the right context.</h2><p>Select only what matters, decide how you want to sound, and edit the result before you copy or insert it.</p><a class="text-link" href="https://github.com/rixabhh/flick#reply-composer">Explore reply drafting <span>→</span></a></div>
+          <div class="workflow-card composer-card" data-reveal><div class="composer-top"><span class="reply-icon">↗</span><span><small>FLICK REPLY</small><strong>Draft a reply</strong></span><b>×</b></div><div class="context-block"><small>SELECTED CONTEXT</small><p>“Could we move the review to Friday? I want to make sure the final version is ready.”</p></div><div class="tone-row"><span>Warm</span><span>Professional</span><b>Concise</b></div><div class="draft-block"><small>DRAFT</small><p>Absolutely — Friday works well. I’ll make sure the final version is ready for us to review.</p></div><div class="composer-actions"><span>Copy</span><b>Insert into app</b></div></div>
+        </section>
+
+        <section id="models" class="models-section">
+          <div class="models-heading" data-reveal><p class="eyebrow">Dictation without a dead end</p><h2>Choose the model<br />that fits the moment.</h2><p>Start private and local. When speed or a remote model is the right trade-off, connect a compatible transcription provider with a key you control.</p></div>
+          <div class="model-grid" data-reveal>
+            <article><div class="model-number">LOCAL</div><h3>Whisper models</h3><p>Verified English and multilingual models for offline transcription, from quick notes to more accurate long-form speech.</p><span>On-device audio</span></article>
+            <article><div class="model-number">LOCAL</div><h3>Parakeet V3</h3><p>A fast local GGUF option fetched from Hugging Face, with clear model metadata and a pinned, verified download.</p><span>On-device audio</span></article>
+            <article><div class="model-number">CLOUD, OPT-IN</div><h3>Your provider</h3><p>Use an OpenAI-compatible transcription endpoint only when you explicitly choose it. Audio is never silently uploaded.</p><span>Your API key</span></article>
           </div>
         </section>
 
-        <section class="section-grid">
-          <div class="section-copy" data-reveal>
-            <p class="eyebrow">Workflow</p>
-            <h2>Designed for the moment before you press send.</h2>
-            <p>
-              Flick works from your system tray and replaces text directly in
-              the app you are already using. Emails, notes, docs, chats, issue
-              comments, or code-adjacent writing all stay in flow.
-            </p>
-          </div>
-          <div class="steps" data-reveal>
-            <div class="step">
-              <span>01</span>
-              <p>Type your draft anywhere.</p>
-            </div>
-            <div class="step">
-              <span>02</span>
-              <p>Add a trigger like <code>!fix</code>, <code>!casual</code>, or <code>!translate:hindi</code>.</p>
-            </div>
-            <div class="step">
-              <span>03</span>
-              <p>Flick transforms the text in-place and restores your clipboard.</p>
-            </div>
-          </div>
-        </section>
-
-        <section id="commands" class="commands-section">
-          <div class="section-heading" data-reveal>
-            <p class="eyebrow">Commands</p>
-            <h2>Small triggers. Big cleanup.</h2>
-            <p>
-              Built-in commands cover everyday writing, while custom commands
-              let you define your own prompt-backed workflows.
-            </p>
-          </div>
-
-          <div class="command-grid" data-reveal>
-            <article><code>!fix</code><span>Grammar, spelling, punctuation, and awkward phrasing.</span></article>
-            <article><code>!formal</code><span>Professional, polished writing for work.</span></article>
-            <article><code>!casual</code><span>Natural, friendly phrasing for everyday messages.</span></article>
-            <article><code>!shorter</code><span>Condense long text without losing the point.</span></article>
-            <article><code>!longer</code><span>Expand short ideas with useful context.</span></article>
-            <article><code>!rephrase</code><span>Same meaning, cleaner wording.</span></article>
-            <article><code>!bullet</code><span>Turn messy notes into scannable bullets.</span></article>
-            <article><code>!explain</code><span>Simplify complex text into plain language.</span></article>
-            <article><code>!translate:&lt;lang&gt;</code><span>Translate into another language on demand.</span></article>
-          </div>
-        </section>
-
-        <section id="guide" class="commands-section getting-started">
-          <div class="section-heading" data-reveal>
-            <p class="eyebrow">Start in minutes</p>
-            <h2>Help, exactly when you need it.</h2>
-            <p>Flick works in the app you already have open. Pick one simple flow, try it once, and keep writing.</p>
-          </div>
-          <div class="command-grid guide-grid" data-reveal>
-            <article><code>1. Write</code><span>Type a thought, add <code>!fix</code>, and let Flick clean it up in place.</span></article>
-            <article><code>2. Reply</code><span>Select only the message that matters, press the reply shortcut, choose a tone, and review the editable draft.</span></article>
-            <article><code>3. Dictate</code><span>Download a local speech model once, press the dictation shortcut, and speak naturally.</span></article>
-          </div>
-          <p class="guide-note" data-reveal><strong>Built to be safe:</strong> if a target changes, a field is protected, or a paste cannot be confirmed, Flick keeps your result ready to copy instead of guessing.</p>
-        </section>
-
-        <section id="dictation" class="section-grid">
-          <div class="section-copy" data-reveal>
-            <p class="eyebrow">Offline dictation</p>
-            <h2>Speak naturally. Keep audio local.</h2>
-            <p>Choose a microphone and a verified local Whisper model. Flick detects speech, transcribes on-device, and pastes only when the original app is still the safe target.</p>
-          </div>
-          <div class="steps" data-reveal>
-            <div class="step"><span>LOCAL</span><p>Download one verified model once; audio stays on your computer for offline transcription.</p></div>
-            <div class="step"><span>SAFE</span><p>Target changes and protected fields fall back to Copy instead of paste.</p></div>
-            <div class="step"><span>YOURS</span><p>Choose models from Tiny through Large v3 or add a compatible local model.</p></div>
-          </div>
-        </section>
-
-        <section class="feature-band">
-          <div data-reveal><p class="eyebrow">Reply composer</p><h2>Context only when you select it.</h2></div>
-          <div class="prompt-card" data-reveal>
-            <div class="prompt-row"><span>1</span><p>Select the exact conversation text to reference.</p></div>
-            <div class="prompt-row"><span>2</span><p>Choose a tone, describe your intent, and generate an editable draft.</p></div>
-            <div class="prompt-row"><span>3</span><p>Copy it, or explicitly insert it after Flick verifies the target.</p></div>
-          </div>
-        </section>
-
-        <section class="feature-band">
-          <div data-reveal>
-            <p class="eyebrow">Custom triggers</p>
-            <h2>Your own writing operations.</h2>
-          </div>
-          <div class="prompt-card" data-reveal>
-            <div class="prompt-row">
-              <span>Trigger</span>
-              <code>!reply</code>
-            </div>
-            <div class="prompt-row">
-              <span>System prompt</span>
-              <p>Write a concise, confident reply that keeps the same language and intent.</p>
-            </div>
-          </div>
-        </section>
-
-        <section id="privacy" class="section-grid">
-          <div class="section-copy" data-reveal>
-            <p class="eyebrow">Private by design</p>
-            <h2>Bring your own key. Keep control.</h2>
-            <p>
-              Flick connects directly to your selected provider. API keys stay
-              in your operating system keychain, and there is no extra Flick
-              backend sitting between you and your model.
-            </p>
-          </div>
-          <div class="privacy-list" data-reveal>
-            <div><span>BYOK</span><p>Use your own Gemini or OpenRouter key.</p></div>
-            <div><span>Keychain</span><p>Secrets are stored with native OS credential storage.</p></div>
-            <div><span>Local utility</span><p>Built as a lightweight Rust and Tauri desktop app.</p></div>
-          </div>
-        </section>
-
-        <section class="providers" data-reveal>
-          <p class="eyebrow">Provider support</p>
-          <div class="provider-row">
-            <span>Gemini</span>
-            <span>OpenRouter</span>
-            <span>OpenAI-compatible</span>
-            <span>Offline Whisper</span>
-            <span>Hindi + Hinglish aware</span>
+        <section id="privacy" class="privacy-section">
+          <div data-reveal><p class="eyebrow">Privacy is a product feature</p><h2>Helpful, without being nosy.</h2></div>
+          <div class="privacy-grid" data-reveal>
+            <article><span>⌁</span><h3>Selection, not surveillance</h3><p>Reply context starts with text you explicitly select. Flick does not scrape chats, screens, or an accessibility tree.</p></article>
+            <article><span>⌘</span><h3>Safe by default</h3><p>Flick checks the original target before paste-back and falls back to copy when a field is protected or the target changed.</p></article>
+            <article><span>◌</span><h3>Your credentials stay yours</h3><p>API keys live in the operating system keychain, not in a settings file. Diagnostics are explicit and redacted.</p></article>
           </div>
         </section>
 
         <section id="download" class="download-panel" data-reveal>
-          <img src="./assets/flick-logo.png" alt="" />
-          <p class="eyebrow">Flick 2.0 beta</p>
-          <h2>Bring deliberate writing assistance to every text box on your desktop.</h2>
-          <div class="hero-actions">
-            <a class="button primary" href="https://github.com/rixabhh/flick/releases/latest">
-              Download latest
-            </a>
-            <a class="button secondary" href="https://github.com/rixabhh/flick#readme">
-              Read the docs
-            </a>
-          </div>
-          <p class="guide-note install-note"><strong>Choose your processor:</strong> on Windows, download <strong>x64</strong> for Intel/AMD PCs or <strong>arm64</strong> for Snapdragon/Windows ARM PCs. The installers cannot be swapped. Mac releases are labelled Apple Silicon or Intel.</p>
-          <div class="product-hunt-badge">
-            <a href="https://www.producthunt.com/products/flick-7?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-flick-9" target="_blank" rel="noopener noreferrer">
-              <img alt="Flick - AI text transformation without leaving your keyboard. | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1178782&theme=dark&t=1782202518519" />
-            </a>
-          </div>
+          <img src="./assets/flick-logo.png" alt="" /><p class="eyebrow">Flick 2.0 beta</p><h2>Make every text field<br />feel a little more capable.</h2><p>Download the current beta, choose your own provider and model, and keep your writing in flow.</p><div class="hero-actions"><a class="button primary" href="https://github.com/rixabhh/flick/releases/latest">Download latest <span>↓</span></a><a class="button secondary" href="https://github.com/rixabhh/flick#readme">Read the guide <span>→</span></a></div><small>Windows x64 &amp; ARM64 · macOS Apple Silicon &amp; Intel · Linux x64</small>
         </section>
       </main>
-
-      <footer class="site-footer">
-        <span>Flick</span>
-        <a href="https://github.com/rixabhh/flick">GitHub</a>
-      </footer>
+      <footer class="site-footer"><a class="brand" href="#top"><img src="./assets/flick-logo.png" alt="" /><span>Flick</span></a><span>Local-first writing assistance.</span><a href="https://github.com/rixabhh/flick">GitHub ↗</a></footer>
     </div>
-
     <script src="./script.js"></script>
   </body>
 </html>
