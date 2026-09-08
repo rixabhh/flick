@@ -736,9 +736,8 @@ mod tests {
         let state = ModelDownloadState::default();
         let first = begin_model_download(&state, "whisper-tiny-en").expect("first transfer starts");
         assert!(!first.load(std::sync::atomic::Ordering::SeqCst));
-        assert!(begin_model_download(&state, "whisper-base-en")
-            .expect_err("second transfer is rejected")
-            .contains("Another model is downloading"));
+        let second = begin_model_download(&state, "whisper-base-en");
+        assert!(matches!(second, Err(message) if message.contains("Another model is downloading")));
         state
             .active
             .lock()
