@@ -118,6 +118,11 @@ fn initialize_local_engine() -> Result<()> {
             transcribe_cpp::init_backends_default().map_err(|error| error.to_string())
         })
         .as_ref()
+        // `OnceLock::get_or_init` yields a reference to the cached Result.
+        // Do not let that reference escape this provider boundary: callers
+        // need the unit success value, while a failed initialization remains
+        // cached and reported consistently on every later dictation attempt.
+        .map(|_| ())
         .map_err(|error| anyhow::anyhow!("Could not initialize local transcription engine: {error}"))
 }
 
