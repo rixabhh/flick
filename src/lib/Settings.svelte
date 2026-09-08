@@ -34,6 +34,7 @@
     dictation_provider: "local-whisper",
     dictation_cloud_base_url: "https://api.openai.com/v1",
     dictation_cloud_model: "gpt-4o-mini-transcribe",
+    floating_pill_position: "bottom-center",
     dictation_language: "en",
     dictation_translate_to_english: false,
     dictation_filler_cleanup: true,
@@ -254,6 +255,15 @@
       await invoke("save_config", { config });
     } catch (e) {
       console.error("Failed to save dictation provider:", e);
+    }
+  }
+
+  async function updateFloatingPillPosition() {
+    try {
+      await invoke("save_config", { config });
+      await invoke("apply_floating_pill_position");
+    } catch (e) {
+      console.error("Failed to reposition floating pill:", e);
     }
   }
 
@@ -489,6 +499,7 @@
           <ApiKeyInput provider="dictation-openai-compatible" model={config.dictation_cloud_model} customBaseUrl={config.dictation_cloud_base_url} showTest={false} providerLabel="cloud transcription" apiKeyUrl="https://platform.openai.com/api-keys" />
         {/if}
         <label class="setting-field"><span>Dictation shortcut</span><input type="text" bind:value={config.dictation_shortcut} onblur={() => updateConfig("dictation_shortcut", config.dictation_shortcut)} /></label>
+        <label class="setting-field"><span>Floating pill position</span><select bind:value={config.floating_pill_position} onchange={updateFloatingPillPosition}><option value="bottom-center">Bottom center</option><option value="bottom-left">Bottom left</option><option value="bottom-right">Bottom right</option><option value="top-center">Top center</option></select><small>Used for both dictation and transformation status. It stays out of your active app until needed.</small></label>
         <label class="setting-field"><span>Activation</span><select bind:value={config.dictation_mode} onchange={() => updateConfig("dictation_mode", config.dictation_mode)}><option value="hold-or-toggle">Hold or toggle</option><option value="push-to-talk">Push to talk</option><option value="toggle">Toggle</option></select></label>
         <label class="setting-field"><span>Microphone</span><select bind:value={config.dictation_device_id} onchange={() => updateConfig("dictation_device_id", config.dictation_device_id)}><option value="">System default</option>{#each inputDevices as device}<option value={device.id}>{device.name}{device.is_default ? " (default)" : ""}</option>{/each}</select></label>
         <label class="setting-field"><span>Spoken language</span><select bind:value={config.dictation_language} onchange={() => updateConfig("dictation_language", config.dictation_language)}><option value="en">English</option><option value="es">Spanish</option><option value="hi">Hindi</option><option value="fr">French</option><option value="de">German</option><option value="auto">Detect automatically</option></select></label>

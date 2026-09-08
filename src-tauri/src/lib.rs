@@ -60,6 +60,7 @@ pub fn run() {
             commands::test_api_connection,
             commands::get_config,
             commands::save_config,
+            commands::apply_floating_pill_position,
             commands::toggle_enabled,
             commands::add_custom_command,
             commands::update_custom_command,
@@ -109,6 +110,9 @@ pub fn run() {
             });
             app.manage(dictation::DictationState::new());
             app.manage(dictation::DictationTargetState::default());
+            if let Err(error) = commands::position_floating_pills(&app_handle) {
+                log::warn!("Could not position Flick's floating pills: {error}");
+            }
             app.manage(models::ModelDownloadState::default());
             handle_cli_args(&app_handle, std::env::args().collect());
 

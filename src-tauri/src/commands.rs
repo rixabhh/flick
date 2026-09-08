@@ -6,7 +6,7 @@ use crate::{ai_client, config, keychain};
 use serde::Deserialize;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, PhysicalPosition, Position};
 
 const BUILTIN_TRIGGERS: &[&str] = &[
     "fix",
@@ -119,6 +119,45 @@ pub async fn get_config(app: AppHandle) -> Result<config::FlickConfig, String> {
 pub async fn save_config(app: AppHandle, config: config::FlickConfig) -> Result<(), String> {
     config::save_config(&app, &config).map_err(|e| e.to_string())?;
     sync_config_state(&app, &config);
+    Ok(())
+}
+
+/// Apply the user's shared pill placement to the hidden floating windows. We
+/// compute physical coordinates against the current/primary monitor, so this
+/// remains correct on DPI-scaled and multi-monitor desktops.
+#[tauri::command]
+pub async fn apply_floating_pill_position(app: AppHandle) -> Result<(), String> {
+    position_floating_pills(&app).map_err(|error| error.to_string())
+}
+
+pub fn position_floating_pills(app: &AppHandle) -> anyhow::Result<()> {
+    let position = config::load_config(app)?.floating_pill_position;
+    for label in ["dictation", "toast"] {
+        let Some(window) = app.get_webview_window(label) else {
+            continue;
+        };
+        let monitor = window
+            .current_monitor()?
+            .or(app.primary_monitor()?)
+            .ok_or_else(|| anyhow::anyhow!("Could not determine a display for Flick's floating pill"))?;
+        let monitor_position = monitor.position();
+        let monitor_size = monitor.size();
+        let window_size = window.outer_size()?;
+        let margin = 24_i32;
+        let left = monitor_position.x;
+        let top = monitor_position.y;
+        let right = left + monitor_size.width as i32;
+        let bottom = top + monitor_size.height as i32;
+        let width = window_size.width as i32;
+        let height = window_size.height as i32;
+        let (x, y) = match position.as_str() {
+            "bottom-left" => (left + margin, bottom - height - margin),
+            "bottom-right" => (right - width - margin, bottom - height - margin),
+            "top-center" => (left + (monitor_size.width as i32 - width) / 2, top + margin),
+            _ => (left + (monitor_size.width as i32 - width) / 2, bottom - height - margin),
+        };
+        window.set_position(Position::Physical(PhysicalPosition::new(x, y)))?;
+    }
     Ok(())
 }
 

@@ -20,7 +20,7 @@
       fadeTimer = setTimeout(() => {
         state = "idle";
         hideWindow();
-      }, 800);
+      }, 1100);
     });
 
     const unlisten3 = listen("flick://error", (event) => {
@@ -30,7 +30,7 @@
       fadeTimer = setTimeout(() => {
         state = "idle";
         hideWindow();
-      }, 2000);
+      }, 2800);
     });
 
     const unlisten4 = listen("flick://transform-finished", () => {
@@ -40,10 +40,10 @@
     });
 
     return () => {
-      unlisten1.then(f => f());
-      unlisten2.then(f => f());
-      unlisten3.then(f => f());
-      unlisten4.then(f => f());
+      unlisten1.then((dispose) => dispose());
+      unlisten2.then((dispose) => dispose());
+      unlisten3.then((dispose) => dispose());
+      unlisten4.then((dispose) => dispose());
       clearTimers();
     };
   });
@@ -56,126 +56,46 @@
   }
 
   async function showWindow() {
-    try {
-      const win = getCurrentWindow();
-      await win.show();
-    } catch {}
+    try { await getCurrentWindow().show(); } catch {}
   }
 
   async function hideWindow() {
-    try {
-      const win = getCurrentWindow();
-      await win.hide();
-    } catch {}
+    try { await getCurrentWindow().hide(); } catch {}
   }
 </script>
 
-<div class="toast-container" class:visible={state !== "idle"} class:fade-out={state === "idle"}>
+<div class="toast-container" class:visible={state !== "idle"} aria-live="polite">
   {#if state === "transforming"}
-    <div class="toast toast-transforming">
-      <span class="spinner" aria-hidden="true"></span>
-      <span class="toast-text">Transforming</span>
+    <div class="toast toast-transforming" role="status">
+      <span class="status-icon spinner" aria-hidden="true"></span>
+      <span class="toast-copy"><strong>Transforming</strong><small>Making your text clearer</small></span>
     </div>
   {:else if state === "done"}
-    <div class="toast toast-done">
-      <svg class="toast-icon" viewBox="0 0 20 20" fill="currentColor">
-        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-      </svg>
-      <span class="toast-text">Done</span>
+    <div class="toast toast-done" role="status">
+      <span class="status-icon success" aria-hidden="true">✓</span>
+      <span class="toast-copy"><strong>Ready</strong><small>Text replaced successfully</small></span>
     </div>
   {:else if state === "error"}
-    <div class="toast toast-error">
-      <svg class="toast-icon" viewBox="0 0 20 20" fill="currentColor">
-        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-      </svg>
-      <span class="toast-text">{errorMessage}</span>
+    <div class="toast toast-error" role="alert">
+      <span class="status-icon warning" aria-hidden="true">!</span>
+      <span class="toast-copy"><strong>Couldn’t transform</strong><small>{errorMessage}</small></span>
     </div>
   {/if}
 </div>
 
 <style>
-  .toast-container {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    opacity: 0;
-    transform: translateY(3px) scale(0.98);
-    transition: opacity 140ms ease, transform 140ms ease;
-  }
-
-  .toast-container.visible {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-
-  .toast {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: fit-content;
-    min-height: 32px;
-    padding: 7px 11px;
-    border: 1px solid rgba(242, 244, 248, 0.12);
-    border-radius: 999px;
-    background: rgba(16, 17, 19, 0.9);
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
-    white-space: nowrap;
-    font-size: 12px;
-    font-weight: 600;
-    font-family: var(--font-body);
-    max-width: calc(100% - 16px);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-  }
-
-  .toast-transforming {
-    color: var(--text-primary);
-  }
-
-  .toast-done {
-    color: var(--success);
-  }
-
-  .toast-error {
-    border-color: rgba(255, 107, 107, 0.32);
-    color: var(--error);
-  }
-
-  .toast-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .toast-error .toast-text {
-    display: -webkit-box;
-    line-clamp: 2;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-
-  .toast-icon {
-    width: 13px;
-    height: 13px;
-    flex-shrink: 0;
-  }
-
-  .spinner {
-    width: 12px;
-    height: 12px;
-    border: 1.5px solid rgba(242, 244, 248, 0.18);
-    border-top-color: rgba(242, 244, 248, 0.86);
-    border-radius: 50%;
-    animation: spin 820ms linear infinite;
-    flex-shrink: 0;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
+  :global(html), :global(body) { background: transparent; overflow: hidden; }
+  .toast-container { display:grid; place-items:center; width:100%; height:100%; opacity:0; transform:translateY(7px) scale(.96); transition:opacity 180ms ease,transform 240ms cubic-bezier(.2,.8,.2,1); }
+  .toast-container.visible { opacity:1; transform:none; }
+  .toast { display:flex; align-items:center; gap:10px; width:calc(100% - 12px); min-height:58px; padding:9px 12px; color:rgba(255,255,255,.96); background:linear-gradient(135deg,rgba(43,48,59,.94),rgba(18,20,26,.96)); border:1px solid rgba(255,255,255,.18); border-radius:17px; box-shadow:0 16px 42px rgba(0,0,0,.36),inset 0 1px rgba(255,255,255,.12); backdrop-filter:blur(24px) saturate(1.35); -webkit-backdrop-filter:blur(24px) saturate(1.35); font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif; }
+  .status-icon { display:grid; flex:0 0 28px; place-items:center; width:28px; height:28px; border-radius:10px; font-size:15px; font-weight:700; }
+  .spinner { border:2px solid rgba(185,210,255,.2); border-top-color:#bcd5ff; animation:spin .8s linear infinite; }
+  .success { color:#b8f5cd; background:rgba(76,196,120,.18); border:1px solid rgba(126,232,164,.22); }
+  .warning { color:#ffd0d0; background:rgba(255,107,107,.16); border:1px solid rgba(255,147,147,.24); }
+  .toast-copy { display:grid; min-width:0; gap:1px; }
+  strong { font-size:12px; line-height:1.2; letter-spacing:-.01em; }
+  small { overflow:hidden; color:rgba(245,247,251,.66); font-size:10px; line-height:1.25; text-overflow:ellipsis; white-space:nowrap; }
+  .toast-error small { white-space:normal; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .toast-container,.spinner { animation:none; transition:none; } }
 </style>
