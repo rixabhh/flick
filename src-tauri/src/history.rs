@@ -4,8 +4,35 @@ use anyhow::{Context, Result};
 use arboard::Clipboard;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
+
+/// The most recent completed output is kept only for the current Flick
+/// process. It gives a safe recovery route after a guarded paste is refused,
+/// even when the user has deliberately disabled persistent history.
+pub struct RecentResultState {
+    latest: Mutex<Option<String>>,
+}
+
+impl Default for RecentResultState {
+    fn default() -> Self {
+        Self {
+            latest: Mutex::new(None),
+        }
+    }
+}
+
+pub fn remember_result(app: &AppHandle, text: &str) {
+    if text.trim().is_empty() {
+        return;
+    }
+    if let Some(state) = app.try_state::<RecentResultState>() {
+        if let Ok(mut latest) = state.latest.lock() {
+            *latest = Some(text.to_string());
+        }
+    }
+}
 
 #[derive(Debug, Serialize)]
 pub struct HistoryEntry {
@@ -82,9 +109,14 @@ pub fn latest_text(app: &AppHandle) -> Result<Option<String>> {
 /// Copy the latest optional local-history result without reading or changing
 /// the active application. This is shared by the tray, CLI, and global key.
 pub fn copy_last_result(app: &AppHandle) -> Result<bool> {
-    let Some(text) = latest_text(app)? else {
-        return Ok(false);
+    let recent = app
+        .try_state::<RecentResultState>()
+        .and_then(|state| state.latest.lock().ok().and_then(|latest| latest.clone()));
+    let text = match recent {
+        Some(text) => Some(text),
+        None => latest_text(app)?,
     };
+    let Some(text) = text else { return Ok(false); };
     Clipboard::new()
         .and_then(|mut clipboard| clipboard.set_text(text))
         .context("Could not write the clipboard")?;

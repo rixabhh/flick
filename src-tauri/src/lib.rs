@@ -111,6 +111,7 @@ pub fn run() {
             });
             app.manage(dictation::DictationState::new());
             app.manage(dictation::DictationTargetState::default());
+            app.manage(history::RecentResultState::default());
             if let Err(error) = commands::position_floating_pills(&app_handle) {
                 log::warn!("Could not position Flick's floating pills: {error}");
             }
@@ -515,6 +516,7 @@ async fn finish_dictation(app: &AppHandle) {
     match dictation::stop_and_transcribe(app).await {
         Ok(text) => {
             let text = maybe_cleanup_dictation(app, text).await;
+            history::remember_result(app, &text);
             let _ = history::record(app, "dictation", &text);
             let append_space = app
                 .try_state::<AppState>()

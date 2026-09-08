@@ -17,6 +17,24 @@ const CLIPBOARD_COPY_DELAY: Duration = Duration::from_millis(60);
 const CLIPBOARD_RESTORE_DELAY: Duration = Duration::from_millis(50);
 const PASTE_DELAY: Duration = Duration::from_millis(35);
 
+fn same_target(expected: &crate::active_target::ActiveTarget, current: &crate::active_target::ActiveTarget) -> bool {
+    !expected.app_name.is_empty()
+        && expected.app_name == current.app_name
+        && (expected.process_path.is_empty()
+            || current.process_path.is_empty()
+            || expected.process_path == current.process_path)
+}
+
+fn verify_original_target(expected: &crate::active_target::ActiveTarget) -> Result<()> {
+    let current = crate::active_target::get()
+        .context("Flick could not verify the active app before replacing text")?;
+    if same_target(expected, &current) {
+        Ok(())
+    } else {
+        bail!("The original app is no longer active. Flick did not paste into the new app; use Copy last result to recover the completed text.")
+    }
+}
+
 #[cfg(target_os = "macos")]
 fn platform_modifier() -> Key {
     Key::Meta
@@ -41,6 +59,8 @@ pub async fn execute_replacement(
     show_done_toast: bool,
 ) -> Result<()> {
     let started_at = Instant::now();
+    let original_target = crate::active_target::get()
+        .context("Flick could not verify the active app before transforming text")?;
 
     // Step 1: Save current clipboard content
     let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
@@ -120,6 +140,15 @@ pub async fn execute_replacement(
         .as_millis()
         .saturating_sub(clipboard_ms);
 
+    // Keep a process-local recovery copy before the guarded paste. This is
+    // never persisted unless the user has enabled history and the paste
+    // succeeds, but it makes a focus-change refusal recoverable.
+    crate::history::remember_result(app, &transformed);
+    if let Err(error) = verify_original_target(&original_target) {
+        restore_clipboard(&original_clipboard);
+        return Err(error);
+    }
+
     // Step 8: Set transformed text as clipboard content
     {
         let mut cb = match Clipboard::new() {
@@ -150,6 +179,7 @@ pub async fn execute_replacement(
 
     // Step 11: Restore original clipboard content
     restore_clipboard(&original_clipboard);
+    let _ = crate::history::record(app, "transform", &transformed);
 
     // Step 12: Always end the progress state. A disabled completion toast must
     // not leave the "Transforming" indicator on screen indefinitely.
@@ -182,6 +212,8 @@ pub async fn execute_custom_replacement(
     show_done_toast: bool,
 ) -> Result<()> {
     let started_at = Instant::now();
+    let original_target = crate::active_target::get()
+        .context("Flick could not verify the active app before transforming text")?;
 
     // Step 1: Save current clipboard
     let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
@@ -244,6 +276,12 @@ pub async fn execute_custom_replacement(
         .as_millis()
         .saturating_sub(clipboard_ms);
 
+    crate::history::remember_result(app, &transformed);
+    if let Err(error) = verify_original_target(&original_target) {
+        restore_clipboard(&original_clipboard);
+        return Err(error);
+    }
+
     // Step 8: Set clipboard
     {
         let mut cb = match Clipboard::new() {
@@ -274,6 +312,7 @@ pub async fn execute_custom_replacement(
 
     // Step 11: Restore clipboard
     restore_clipboard(&original_clipboard);
+    let _ = crate::history::record(app, "transform", &transformed);
 
     // Step 12: Always end the progress state; success confirmation is optional.
     if show_done_toast {
@@ -493,4 +532,25 @@ fn try_linux_key_chord(key: &str) -> bool {
         return true;
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn target(app_name: &str, process_path: &str) -> crate::active_target::ActiveTarget {
+        crate::active_target::ActiveTarget {
+            app_name: app_name.into(),
+            title: String::new(),
+            process_path: process_path.into(),
+        }
+    }
+
+    #[test]
+    fn guarded_replacement_requires_the_original_app() {
+        let original = target("slack", "c:/apps/slack.exe");
+        assert!(same_target(&original, &target("slack", "c:/apps/slack.exe")));
+        assert!(!same_target(&original, &target("discord", "c:/apps/discord.exe")));
+        assert!(!same_target(&original, &target("slack", "c:/other/slack.exe")));
+    }
 }
