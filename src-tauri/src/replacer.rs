@@ -35,6 +35,14 @@ fn verify_original_target(expected: &crate::active_target::ActiveTarget) -> Resu
     }
 }
 
+fn active_target_is_protected(app: &AppHandle) -> bool {
+    let disabled_apps = app
+        .try_state::<crate::AppState>()
+        .and_then(|state| state.config.lock().ok().map(|config| config.disabled_apps.clone()))
+        .unwrap_or_default();
+    crate::key_hook::active_app_is_protected(&disabled_apps)
+}
+
 #[cfg(target_os = "macos")]
 fn platform_modifier() -> Key {
     Key::Meta
@@ -59,6 +67,9 @@ pub async fn execute_replacement(
     show_done_toast: bool,
 ) -> Result<()> {
     let started_at = Instant::now();
+    if active_target_is_protected(app) {
+        bail!("Flick will not transform text in a protected app or password field")
+    }
     let original_target = crate::active_target::get()
         .context("Flick could not verify the active app before transforming text")?;
 
@@ -144,6 +155,10 @@ pub async fn execute_replacement(
     // never persisted unless the user has enabled history and the paste
     // succeeds, but it makes a focus-change refusal recoverable.
     crate::history::remember_result(app, &transformed);
+    if active_target_is_protected(app) {
+        restore_clipboard(&original_clipboard);
+        bail!("Flick will not paste into a protected app or password field. Use Copy last result to recover the completed text.")
+    }
     if let Err(error) = verify_original_target(&original_target) {
         restore_clipboard(&original_clipboard);
         return Err(error);
@@ -212,6 +227,9 @@ pub async fn execute_custom_replacement(
     show_done_toast: bool,
 ) -> Result<()> {
     let started_at = Instant::now();
+    if active_target_is_protected(app) {
+        bail!("Flick will not transform text in a protected app or password field")
+    }
     let original_target = crate::active_target::get()
         .context("Flick could not verify the active app before transforming text")?;
 
@@ -277,6 +295,10 @@ pub async fn execute_custom_replacement(
         .saturating_sub(clipboard_ms);
 
     crate::history::remember_result(app, &transformed);
+    if active_target_is_protected(app) {
+        restore_clipboard(&original_clipboard);
+        bail!("Flick will not paste into a protected app or password field. Use Copy last result to recover the completed text.")
+    }
     if let Err(error) = verify_original_target(&original_target) {
         restore_clipboard(&original_clipboard);
         return Err(error);
