@@ -12,6 +12,8 @@
   let tone = $state("Warm");
   let customTone = $state("");
   let loading = $state(false);
+  let capturing = $state(false);
+  let inserting = $state(false);
   let error = $state("");
   let copied = $state(false);
   let providerNotice = $state("Provider details are loading…");
@@ -23,8 +25,10 @@
 
   async function captureSelection() {
     error = "";
+    capturing = true;
     try { context = await invoke("capture_reply_context"); }
     catch (message) { error = String(message); }
+    finally { capturing = false; }
   }
 
   async function generate() {
@@ -47,9 +51,11 @@
 
   async function insert() {
     error = "";
+    inserting = true;
     try {
       await invoke("insert_reply", { draft });
     } catch (message) { error = `${message} Your draft is still here; use Copy instead.`; }
+    finally { inserting = false; }
   }
 
   function describeProvider(config) {
@@ -88,7 +94,7 @@
   </header>
   <p class="privacy">Only the text below is used as context. It is never saved by Flick. {providerNotice}</p>
 
-  <label for="context">{t("composer.context")} <button class="link" onclick={captureSelection}>{t("composer.capture")}</button></label>
+  <label for="context">{t("composer.context")} <button class="link" onclick={captureSelection} disabled={capturing}>{capturing ? "Capturing…" : t("composer.capture")}</button></label>
   <textarea id="context" class="context" bind:value={context} placeholder={t("composer.contextPlaceholder")}></textarea>
 
   <span class="label">{t("composer.tone")}</span>
@@ -101,11 +107,11 @@
   <textarea id="intent" bind:value={instruction} placeholder={t("composer.intentPlaceholder")}></textarea>
   <button class="generate" onclick={generate} disabled={loading || !context.trim() || !instruction.trim()}>{loading ? t("composer.drafting") : draft ? t("composer.regenerate") : t("composer.generate")}</button>
 
-  {#if error}<p class="error">{error}</p>{/if}
+  {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if draft}
     <label for="draft">{t("composer.draft")}</label>
     <textarea id="draft" class="draft" bind:value={draft}></textarea>
-    <div class="actions"><button class="secondary" onclick={copy}>{copied ? t("composer.copied") : t("composer.copy")}</button><button class="insert" onclick={insert}>{t("composer.insert")}</button></div>
+    <div class="actions"><button class="secondary" onclick={copy}>{copied ? t("composer.copied") : t("composer.copy")}</button><button class="insert" onclick={insert} disabled={inserting}>{inserting ? "Inserting…" : t("composer.insert")}</button></div>
   {/if}
 </main>
 

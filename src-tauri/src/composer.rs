@@ -92,16 +92,42 @@ pub async fn open_from_shortcut(app: &AppHandle) {
 
 #[tauri::command]
 pub async fn capture_reply_context(app: AppHandle) -> Result<String, String> {
+    // This command is normally invoked from the visible composer. Give the OS
+    // a moment to restore the app that was active before Flick; otherwise the
+    // clipboard shortcut would capture from Flick's own textarea rather than
+    // the user-selected message. The composer is restored on every outcome.
+    let was_visible = if let Some(window) = app.get_webview_window("composer") {
+        let visible = window.is_visible().unwrap_or(false);
+        if visible {
+            let _ = window.hide();
+            sleep(Duration::from_millis(120)).await;
+        }
+        visible
+    } else {
+        false
+    };
     if current_target_is_protected(&app) {
+        if was_visible {
+            restore_composer(&app);
+        }
         return Err("Flick will not capture text from a protected app or password field.".into());
     }
     // This command can be invoked after the composer has already been open.
     // Bind insertion to the target that supplied this new explicit selection,
     // not an older target remembered when the window first appeared.
     remember_target(&app, foreground_target().ok());
-    let selection = replacer::capture_selected_text()
-        .await
-        .map_err(|error| error.to_string())?;
+    let selection = match replacer::capture_selected_text().await {
+        Ok(selection) => selection,
+        Err(error) => {
+            if was_visible {
+                restore_composer(&app);
+            }
+            return Err(error.to_string());
+        }
+    };
+    if was_visible {
+        restore_composer(&app);
+    }
     if selection.trim().is_empty() {
         return Err(
             "No selected text was found. Select a message first, or add context manually.".into(),
