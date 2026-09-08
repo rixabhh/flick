@@ -3,7 +3,10 @@ name: Verify
 on:
   pull_request:
   push:
-    branches: [main]
+    # Market-ready work is deliberately split into reviewable codex/* branches.
+    # Verify them before merge so a native regression cannot sit uncompiled
+    # until it reaches main.
+    branches: [main, "codex/**"]
 
 # A newer commit fully supersedes an earlier verification run for the same
 # branch. This prevents documentation-only pushes from starving the current
