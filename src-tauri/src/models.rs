@@ -5,11 +5,12 @@
 //! or cancelled download can therefore never masquerade as an installed model.
 
 use anyhow::{bail, Context, Result};
-use futures_util::StreamExt;
+use futures_util::{FutureExt, StreamExt};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::panic::AssertUnwindSafe;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -258,6 +259,30 @@ pub fn model_is_english_only(id: &str) -> Result<bool> {
     Ok(catalog_model(id)?.english_only)
 }
 
+/// Register one model transfer at a time. Local speech models are large enough
+/// that competing downloads make the app appear unresponsive and can exhaust
+/// disk space on a laptop. A later queue can replace this guard without
+/// weakening the single, well-defined active-transfer lifecycle.
+fn begin_model_download(
+    state: &ModelDownloadState,
+    id: &str,
+) -> Result<Arc<std::sync::atomic::AtomicBool>, String> {
+    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let mut active = state
+        .active
+        .lock()
+        .map_err(|_| "Model download state is unavailable".to_string())?;
+    if active.contains_key(id) {
+        return Err("This model is already downloading".to_string());
+    }
+    if !active.is_empty() {
+        return Err("Another model is downloading. Finish or cancel it before starting another."
+            .to_string());
+    }
+    active.insert(id.to_string(), Arc::clone(&cancel));
+    Ok(cancel)
+}
+
 /// Only catalogued Whisper models advertise the translation task. Custom and
 /// Parakeet GGUF files are deliberately conservative: Flick will transcribe
 /// them locally but never asks them to translate unless a future catalog entry
@@ -441,20 +466,13 @@ pub async fn set_active_local_model(app: AppHandle, id: String) -> Result<(), St
 
 #[tauri::command]
 pub fn download_local_model(app: AppHandle, id: String) -> Result<(), String> {
+    // Reject malformed or unknown IDs before changing the download state. This
+    // keeps an invalid IPC request from leaving the UI in a waiting state.
+    catalog_model(&id).map_err(|error| error.to_string())?;
     let state = app
         .try_state::<ModelDownloadState>()
         .ok_or_else(|| "Model downloader is still starting. Please try again.".to_string())?;
-    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    {
-        let mut active = state
-            .active
-            .lock()
-            .map_err(|_| "Model download state is unavailable".to_string())?;
-        if active.contains_key(&id) {
-            return Err("This model is already downloading".to_string());
-        }
-        active.insert(id.clone(), Arc::clone(&cancel));
-    }
+    let cancel = begin_model_download(&state, &id)?;
     let _ = app.emit(
         "flick://model-download",
         serde_json::json!({ "id": id.clone(), "state": "started" }),
@@ -463,17 +481,28 @@ pub fn download_local_model(app: AppHandle, id: String) -> Result<(), String> {
     // control. Run them outside the IPC request so a network or native-library
     // failure cannot close the settings webview or leave its buttons stuck.
     tauri::async_runtime::spawn(async move {
-        let result = download_model_with_cancel(&app, &id, &cancel).await;
+        // The release profile unwinds panics, but a recovered task must still
+        // clear its state and notify the webview rather than strand a button
+        // in its progress state. Normal network and integrity errors keep
+        // their original, actionable messages below.
+        let result = AssertUnwindSafe(download_model_with_cancel(&app, &id, &cancel))
+            .catch_unwind()
+            .await;
         if let Some(active) = app.try_state::<ModelDownloadState>() {
             if let Ok(mut downloads) = active.active.lock() {
                 downloads.remove(&id);
             }
         }
         let payload = match result {
-            Ok(()) => serde_json::json!({ "id": id, "state": "complete" }),
-            Err(error) => {
+            Ok(Ok(())) => serde_json::json!({ "id": id, "state": "complete" }),
+            Ok(Err(error)) => {
                 serde_json::json!({ "id": id, "state": "failed", "message": error.to_string() })
             }
+            Err(_) => serde_json::json!({
+                "id": id,
+                "state": "failed",
+                "message": "Flick recovered from an unexpected download failure. No model was installed; please retry."
+            }),
         };
         let _ = app.emit("flick://model-download", payload);
     });
@@ -701,6 +730,22 @@ pub async fn delete_local_model(app: AppHandle, id: String) -> Result<(), String
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn model_download_state_allows_only_one_active_transfer() {
+        let state = ModelDownloadState::default();
+        let first = begin_model_download(&state, "whisper-tiny-en").expect("first transfer starts");
+        assert!(!first.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(begin_model_download(&state, "whisper-base-en")
+            .expect_err("second transfer is rejected")
+            .contains("Another model is downloading"));
+        state
+            .active
+            .lock()
+            .expect("download state lock")
+            .remove("whisper-tiny-en");
+        assert!(begin_model_download(&state, "whisper-base-en").is_ok());
+    }
 
     #[test]
     fn catalog_has_valid_sha256() {

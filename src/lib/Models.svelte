@@ -16,9 +16,16 @@
     finally { loading = false; }
   }
   async function download(id) {
+    if (downloading && downloading !== id) {
+      error = "A model download is already in progress. Wait for it to finish or cancel it before starting another.";
+      return;
+    }
     downloading = id; error = "";
     try { await invoke("download_local_model", { id }); }
-    catch (message) { downloading = ""; error = `Download didn't start. Your existing model is safe. ${String(message)}`; }
+    catch (message) {
+      if (downloading === id) downloading = "";
+      error = `Download didn't start. Your existing model is safe. ${String(message)}`;
+    }
   }
   async function remove(id) {
     error = "";
