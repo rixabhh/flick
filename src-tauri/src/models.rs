@@ -35,6 +35,7 @@ pub struct ModelInfo {
     pub name: String,
     pub description: String,
     pub language: String,
+    pub engine: String,
     pub size_bytes: u64,
     /// The binary is present but has not yet been verified by Flick. This is
     /// deliberately separate from `installed`: opening Models must never read
@@ -149,6 +150,19 @@ const CATALOG: &[CatalogModel] = &[CatalogModel {
     sha256: "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2",
     size_bytes: 3_095_033_483,
     english_only: false,
+}, CatalogModel {
+    // Pinned to the catalog revision Handy uses. This is a Hugging Face model,
+    // not an unverified redirect: Flick still streams, hashes, and atomically
+    // promotes the exact GGUF file before it may be selected.
+    id: "parakeet-tdt-0.6b-v3-q8",
+    name: "Parakeet TDT 0.6B v3",
+    description: "Fast, accurate local dictation across 25 European languages. Translation to English is not supported by this model.",
+    language: "25 European languages",
+    file_name: "parakeet-tdt-0.6b-v3-Q8_0.gguf",
+    url: "https://huggingface.co/handy-computer/parakeet-tdt-0.6b-v3-gguf/resolve/85ac09ea12fc4b1112fa76810059364bc6adc9de/parakeet-tdt-0.6b-v3-Q8_0.gguf?download=true",
+    sha256: "5859f77944efcd8eafa23a6350731960b2b55b2203df51f319665c807d802cc7",
+    size_bytes: 739_508_576,
+    english_only: false,
 }];
 
 fn catalog_model(id: &str) -> Result<&'static CatalogModel> {
@@ -179,7 +193,9 @@ fn custom_file_name(id: &str) -> Option<&str> {
         && !name.contains(['/', '\\'])
         && std::path::Path::new(name)
             .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("bin")))
+            .is_some_and(|extension| {
+                extension.eq_ignore_ascii_case("bin") || extension.eq_ignore_ascii_case("gguf")
+            }))
     .then_some(name)
 }
 
@@ -240,6 +256,17 @@ pub fn model_is_english_only(id: &str) -> Result<bool> {
     Ok(catalog_model(id)?.english_only)
 }
 
+/// Only catalogued Whisper models advertise the translation task. Custom and
+/// Parakeet GGUF files are deliberately conservative: Flick will transcribe
+/// them locally but never asks them to translate unless a future catalog entry
+/// has verified that capability.
+pub fn model_supports_translation(id: &str) -> Result<bool> {
+    if custom_file_name(id).is_some() {
+        return Ok(false);
+    }
+    Ok(catalog_model(id)?.id.starts_with("whisper-"))
+}
+
 #[tauri::command]
 pub async fn list_local_models(app: AppHandle) -> Result<Vec<ModelInfo>, String> {
     let config = crate::config::load_config(&app).map_err(|error| error.to_string())?;
@@ -270,6 +297,11 @@ pub async fn list_local_models(app: AppHandle) -> Result<Vec<ModelInfo>, String>
             name: model.name.to_string(),
             description: model.description.to_string(),
             language: model.language.to_string(),
+            engine: if model.file_name.ends_with(".gguf") {
+                "Parakeet / GGUF".to_string()
+            } else {
+                "Whisper / GGML".to_string()
+            },
             size_bytes: model.size_bytes,
             available_locally,
             installed,
@@ -287,14 +319,21 @@ pub async fn list_local_models(app: AppHandle) -> Result<Vec<ModelInfo>, String>
             if path.is_file()
                 && path
                     .extension()
-                    .is_some_and(|extension| extension.eq_ignore_ascii_case("bin"))
+                    .is_some_and(|extension| {
+                        extension.eq_ignore_ascii_case("bin") || extension.eq_ignore_ascii_case("gguf")
+                    })
                 && !catalog_files.contains(name)
             {
                 models.push(ModelInfo {
                     id: format!("custom:{name}"),
                     name: format!("Custom local model: {name}"),
-                    description: "User-provided local model. Flick never uploads it; compatibility is checked when it is loaded.".into(),
+                    description: "User-provided local GGML/GGUF model. Flick never uploads it; compatibility is checked when it is loaded.".into(),
                     language: "User supplied".into(),
+                    engine: if name.ends_with(".gguf") {
+                        "Compatible GGUF".into()
+                    } else {
+                        "Compatible GGML".into()
+                    },
                     size_bytes: entry.metadata().map(|metadata| metadata.len()).unwrap_or(0),
                     available_locally: true,
                     installed: true,
@@ -621,6 +660,23 @@ mod tests {
             assert!(!model.english_only, "{id} must support multilingual use");
             assert!(model.size_bytes > 1_000_000);
         }
+    }
+
+    #[test]
+    fn parakeet_v3_is_pinned_and_cannot_claim_translation() {
+        let model = catalog_model("parakeet-tdt-0.6b-v3-q8").expect("Parakeet catalog model");
+        assert!(model.file_name.ends_with(".gguf"));
+        assert!(model.url.contains("85ac09ea12fc4b1112fa76810059364bc6adc9de"));
+        assert_eq!(model.size_bytes, 739_508_576);
+        assert!(!model_supports_translation(model.id).unwrap());
+    }
+
+    #[test]
+    fn custom_gguf_models_are_discoverable_but_never_assumed_to_translate() {
+        assert_eq!(custom_file_name("custom:dictation.gguf"), Some("dictation.gguf"));
+        assert_eq!(custom_file_name("custom:dictation.bin"), Some("dictation.bin"));
+        assert_eq!(custom_file_name("custom:dictation.onnx"), None);
+        assert!(!model_supports_translation("custom:dictation.gguf").unwrap());
     }
 
     #[tokio::test]

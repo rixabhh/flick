@@ -66,7 +66,7 @@
   {#if loading}<div class="loading" aria-live="polite">Checking what is already on this computer…</div>{/if}
   {#each models as model}
     <article>
-      <div><strong>{model.name}</strong><p>{model.description}</p><span>{model.language} · {size(model.size_bytes)}</span></div>
+      <div><strong>{model.name}</strong><p>{model.description}</p><span>{model.engine} · {model.language} · {size(model.size_bytes)}</span></div>
       {#if model.installed}
         {#if model.active}<span class="active">In use</span>{:else}<div class="actions"><button onclick={() => select(model.id)}>Use</button><button class="remove" onclick={() => remove(model.id)}>Remove</button></div>{/if}
       {:else if model.available_locally}

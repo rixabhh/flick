@@ -216,27 +216,9 @@ pub fn dictation_input_level(app: AppHandle) -> f32 {
 }
 #[tauri::command]
 pub fn dictation_runtime_info() -> DictationRuntimeInfo {
-    let details = whisper_rs::print_system_info().to_string();
     DictationRuntimeInfo {
-        acceleration: classify_acceleration(&details).to_string(),
-        details,
-    }
-}
-
-fn classify_acceleration(details: &str) -> &'static str {
-    let details = details.to_ascii_lowercase();
-    if details.contains("cuda") {
-        "CUDA GPU"
-    } else if details.contains("vulkan") {
-        "Vulkan GPU"
-    } else if details.contains("metal") {
-        "Metal GPU"
-    } else if details.contains("opencl") {
-        "OpenCL GPU"
-    } else if details.contains("avx2") || details.contains("neon") {
-        "CPU optimized"
-    } else {
-        "CPU"
+        acceleration: "Native local engine".to_string(),
+        details: "Whisper GGML and compatible GGUF models (including Parakeet) run on this device. Flick never uploads audio when Local Whisper is selected.".to_string(),
     }
 }
 /// Briefly capture from the selected microphone and discard the samples. This
@@ -504,6 +486,12 @@ async fn stop_and_transcribe_inner(app: &AppHandle) -> Result<String> {
         && (settings.dictation_language != "en" || settings.dictation_translate_to_english)
     {
         bail!("Choose the multilingual speech model to dictate in another language or translate.");
+    }
+    if provider.requires_local_model
+        && settings.dictation_translate_to_english
+        && !crate::models::model_supports_translation(&settings.dictation_model_id)?
+    {
+        bail!("The selected local speech model can transcribe but cannot translate to English. Turn off translation or choose a multilingual Whisper model.");
     }
     let path = if provider.requires_local_model {
         crate::models::verified_installed_model_path(app).await?
@@ -812,13 +800,6 @@ mod tests {
             }],
         );
         assert_eq!(result, "hello Flick 2");
-    }
-
-    #[test]
-    fn classifies_reported_acceleration_without_hardware_guessing() {
-        assert_eq!(classify_acceleration("CPU: AVX2 = 1"), "CPU optimized");
-        assert_eq!(classify_acceleration("ggml CUDA enabled"), "CUDA GPU");
-        assert_eq!(classify_acceleration("generic backend"), "CPU");
     }
 
     #[test]

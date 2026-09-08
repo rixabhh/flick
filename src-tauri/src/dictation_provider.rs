@@ -8,8 +8,8 @@
 use anyhow::{bail, Context, Result};
 use reqwest::{multipart, Url};
 use serde::{Deserialize, Serialize};
-use std::{io::Cursor, path::Path};
-use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
+use std::{io::Cursor, path::Path, sync::OnceLock};
+use transcribe_cpp::{Model, RunOptions, Task};
 
 pub const LOCAL_WHISPER_PROVIDER_ID: &str = "local-whisper";
 pub const CLOUD_OPENAI_COMPATIBLE_PROVIDER_ID: &str = "cloud-openai-compatible";
@@ -39,7 +39,7 @@ impl DictationProviderInfo {
     fn local_whisper() -> Self {
         Self {
             id: LOCAL_WHISPER_PROVIDER_ID.to_string(),
-            label: "Local Whisper".to_string(),
+            label: "Local models (Whisper & Parakeet)".to_string(),
             kind: DictationProviderKind::Local,
             sends_audio_off_device: false,
             supports_translation: true,
@@ -70,9 +70,12 @@ pub struct TranscriptionRequest {
     pub local_model_path: Option<std::path::PathBuf>,
 }
 
-struct LocalWhisperTranscriber;
+/// `transcribe-cpp` auto-detects legacy Whisper GGML `.bin` files and modern
+/// GGUF architectures such as Parakeet. Existing downloads remain usable while
+/// Flick gains more local model families without changing privacy behavior.
+struct LocalModelTranscriber;
 
-impl LocalWhisperTranscriber {
+impl LocalModelTranscriber {
     fn transcribe(request: TranscriptionRequest) -> Result<String> {
         let path = request
             .local_model_path
@@ -88,27 +91,34 @@ pub(crate) fn transcribe_local_whisper(
     translate_to_english: bool,
     path: &Path,
 ) -> Result<String> {
-    let context = WhisperContext::new_with_params(path, WhisperContextParameters::default())
-        .context("Could not load local speech model")?;
-    let mut state = context
-        .create_state()
-        .context("Could not initialize transcription engine")?;
-    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-    params.set_print_progress(false);
-    params.set_print_realtime(false);
-    params.set_print_timestamps(false);
-    params.set_language((language != "auto").then_some(language));
-    params.set_translate(translate_to_english);
-    state
-        .full(params, audio)
-        .context("Local transcription failed")?;
-    Ok(state
-        .as_iter()
-        .map(|segment| segment.to_string())
-        .collect::<Vec<_>>()
-        .join(" ")
-        .trim()
-        .to_string())
+    initialize_local_engine()?;
+    let model = Model::load(path).context("Could not load local speech model")?;
+    let mut session = model
+        .session()
+        .context("Could not initialize local transcription engine")?;
+    let source_language = (language != "auto").then(|| language.to_string());
+    let translating = translate_to_english && source_language.as_deref() != Some("en");
+    let options = RunOptions {
+        task: if translating { Task::Translate } else { Task::Transcribe },
+        language: source_language,
+        target_language: translating.then(|| "en".to_string()),
+        ..Default::default()
+    };
+    session
+        .run(audio, &options)
+        .map(|result| result.text.trim().to_string())
+        .context("Local transcription failed")
+}
+
+fn initialize_local_engine() -> Result<()> {
+    static INITIALIZATION: OnceLock<std::result::Result<(), String>> = OnceLock::new();
+    INITIALIZATION
+        .get_or_init(|| {
+            transcribe_cpp::init_logging();
+            transcribe_cpp::init_backends_default().map_err(|error| error.to_string())
+        })
+        .as_ref()
+        .map_err(|error| anyhow::anyhow!("Could not initialize local transcription engine: {error}"))
 }
 
 #[derive(Debug, Deserialize)]
@@ -240,7 +250,7 @@ pub async fn transcribe(
     cloud_model: String,
 ) -> Result<String> {
     match provider_id.as_str() {
-        LOCAL_WHISPER_PROVIDER_ID => tokio::task::spawn_blocking(move || LocalWhisperTranscriber::transcribe(request))
+        LOCAL_WHISPER_PROVIDER_ID => tokio::task::spawn_blocking(move || LocalModelTranscriber::transcribe(request))
             .await
             .context("Local transcription task failed")?,
         CLOUD_OPENAI_COMPATIBLE_PROVIDER_ID => {

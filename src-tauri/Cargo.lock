@@ -1649,7 +1649,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tokio",
  "uiautomation",
- "whisper-rs",
+ "transcribe-cpp",
 ]
 
 [[package]]
@@ -6096,25 +6096,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "whisper-rs"
-version = "0.16.0"
+name = "transcribe-cpp"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2088172d00f936c348d6a72f488dc2660ab3f507263a195df308a3c2383229f6"
+checksum = "9cff7b2aaacac97e5f7abb3898d91ad885c87c15dc433907b8045ff5c4ca8440"
 dependencies = [
- "whisper-rs-sys",
+ "log",
+ "thiserror 2.0.18",
+ "transcribe-cpp-sys",
 ]
 
 [[package]]
-name = "whisper-rs-sys"
-version = "0.15.0"
+name = "transcribe-cpp-sys"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6986c0fe081241d391f09b9a071fbcbb59720c3563628c3c829057cf69f2a56f"
+checksum = "02f9a1f1be01b78806a3546a751aa094b8144ac3032474a1e8e783d22bd26281"
 dependencies = [
- "bindgen 0.72.1",
- "cfg-if",
  "cmake",
- "fs_extra",
- "semver",
+ "serde_json",
 ]
 
 [[package]]
