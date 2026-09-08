@@ -173,7 +173,9 @@ pub async fn execute_replacement(
                 return Err(error).context("Failed to access clipboard for transformed text");
             }
         };
-        if let Err(error) = cb.set_text(transformed) {
+        // Keep the completed result available for persistent history only
+        // after the guarded paste succeeds below.
+        if let Err(error) = cb.set_text(transformed.clone()) {
             restore_clipboard(&original_clipboard);
             return Err(error).context("Failed to set transformed text to clipboard");
         }
@@ -313,7 +315,9 @@ pub async fn execute_custom_replacement(
                 return Err(error).context("Failed to access clipboard for transformed text");
             }
         };
-        if let Err(error) = cb.set_text(transformed) {
+        // Keep the completed result available for persistent history only
+        // after the guarded paste succeeds below.
+        if let Err(error) = cb.set_text(transformed.clone()) {
             restore_clipboard(&original_clipboard);
             return Err(error).context("Failed to set transformed text to clipboard");
         }
