@@ -36,6 +36,8 @@ pub struct ModelInfo {
     pub description: String,
     pub language: String,
     pub engine: String,
+    pub supports_translation: bool,
+    pub supported_languages: Vec<String>,
     pub size_bytes: u64,
     /// The binary is present but has not yet been verified by Flick. This is
     /// deliberately separate from `installed`: opening Models must never read
@@ -333,6 +335,7 @@ pub async fn list_local_models(app: AppHandle) -> Result<Vec<ModelInfo>, String>
     let mut models = Vec::with_capacity(CATALOG.len());
     for model in CATALOG {
         let path = directory.join(model.file_name);
+        let capabilities = local_model_capabilities(model.id).map_err(|error| error.to_string())?;
         // Do not hash every installed model here. Large Whisper models are
         // multiple gigabytes and doing that on every visit made the Models tab
         // look frozen (and could exhaust a small machine's IO budget). A model
@@ -360,6 +363,8 @@ pub async fn list_local_models(app: AppHandle) -> Result<Vec<ModelInfo>, String>
             } else {
                 "Whisper / GGML".to_string()
             },
+            supports_translation: capabilities.supports_translation,
+            supported_languages: capabilities.supported_languages,
             size_bytes: model.size_bytes,
             available_locally,
             installed,
@@ -392,6 +397,8 @@ pub async fn list_local_models(app: AppHandle) -> Result<Vec<ModelInfo>, String>
                     } else {
                         "Compatible GGML".into()
                     },
+                    supports_translation: false,
+                    supported_languages: Vec::new(),
                     size_bytes: entry.metadata().map(|metadata| metadata.len()).unwrap_or(0),
                     available_locally: true,
                     installed: true,
