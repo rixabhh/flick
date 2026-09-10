@@ -393,7 +393,11 @@ pub fn local_model_capabilities(id: &str) -> Result<LocalModelCapabilities> {
         return Ok(LocalModelCapabilities {
             id: id.to_string(),
             supports_translation: false,
-            supports_language_detection: true,
+            // A user-provided GGML/GGUF file may be any supported engine
+            // architecture. Never pass an automatic-detection instruction to
+            // an artifact whose capabilities Flick cannot verify; callers can
+            // still choose an explicit language when they know the model.
+            supports_language_detection: false,
             supported_languages: Vec::new(),
         });
     }
@@ -865,6 +869,7 @@ mod tests {
         assert_eq!(custom_file_name("custom:dictation.bin"), Some("dictation.bin"));
         assert_eq!(custom_file_name("custom:dictation.onnx"), None);
         assert!(!model_supports_translation("custom:dictation.gguf").unwrap());
+        assert!(!model_supports_language("custom:dictation.gguf", "auto").unwrap());
     }
 
     #[test]
