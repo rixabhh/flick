@@ -6,6 +6,7 @@ describe("localization", () => {
     expect(translate("es", "tab.dictate")).toBe("Dictado");
     expect(translate("es", "home.title")).toBe("Tu espacio de escritura");
     expect(translate("es", "composer.stale")).toBe("Regenera antes de insertar");
+    expect(translate("es", "composer.privacy")).toBe("Solo el texto de abajo se usa como contexto. Flick nunca lo guarda.");
     expect(translate("es", "dictation.transcribingCloud")).toBe("Transcribiendo con tu proveedor");
     expect(translate("es", "transform.copied")).toBe("Copiado al portapapeles");
   });

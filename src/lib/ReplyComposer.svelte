@@ -17,7 +17,7 @@
   let error = $state("");
   let copied = $state(false);
   let draftSignature = $state("");
-  let providerNotice = $state("Provider details are loading…");
+  let providerNotice = $state("");
   let language = $state("en");
   let contextInput = $state();
   let generateShortcut = $state("⌘ ↵");
@@ -81,15 +81,16 @@
   }
 
   function describeProvider(config) {
-    if (config.provider === "custom") return language === "es" ? "El extremo compatible con OpenAI recibe el contexto solo cuando generas." : "A configured OpenAI-compatible endpoint receives context only when you generate.";
-    if (config.provider === "openrouter") return language === "es" ? "OpenRouter recibe el contexto solo cuando generas." : "OpenRouter receives context only when you generate.";
-    return language === "es" ? "Gemini recibe el contexto solo cuando generas." : "Gemini receives context only when you generate.";
+    if (config.provider === "custom") return t("composer.providerCustom");
+    if (config.provider === "openrouter") return t("composer.providerOpenRouter");
+    return t("composer.providerGemini");
   }
 
   onMount(() => {
     let disposed = false;
     let unlisten = () => {};
     const focusTimer = setTimeout(() => contextInput?.focus(), 0);
+    providerNotice = t("composer.providerLoading");
     // The handler supports either modifier. Reflect the user's platform in
     // the compact hint rather than teaching Windows/Linux users a macOS-only
     // shortcut.
@@ -102,7 +103,7 @@
       const dispose = await listen("flick://composer-context", (event) => {
         context = String(event.payload || "");
         draft = "";
-        error = context ? "" : "No selected text was found. Add context manually.";
+        error = context ? "" : t("composer.noSelection");
       });
       if (disposed) dispose();
       else unlisten = dispose;
@@ -113,7 +114,7 @@
         language = config.app_language === "es" ? "es" : "en";
         providerNotice = describeProvider(config);
       } catch {
-        providerNotice = language === "es" ? "Tu proveedor configurado recibe el contexto solo cuando generas." : "Your configured provider receives context only when you generate.";
+        providerNotice = t("composer.providerFallback");
       }
     })();
     return () => { disposed = true; unlisten(); clearTimeout(focusTimer); };
@@ -130,10 +131,10 @@
       <button class="icon" aria-label={t("composer.close")} onclick={() => getCurrentWindow().hide()}>×</button>
     </header>
 
-    <p class="privacy"><span aria-hidden="true">⌁</span><span>Only the text below is used as context. It is never saved by Flick. {providerNotice}</span></p>
+    <p class="privacy"><span aria-hidden="true">⌁</span><span>{t("composer.privacy")} {providerNotice}</span></p>
 
     <section class="field-group">
-      <div class="field-label"><label for="context">{t("composer.context")}</label><button class="capture" onclick={captureSelection} disabled={capturing}>{capturing ? "Capturing…" : t("composer.capture")}</button></div>
+      <div class="field-label"><label for="context">{t("composer.context")}</label><button class="capture" onclick={captureSelection} disabled={capturing}>{capturing ? t("composer.capturing") : t("composer.capture")}</button></div>
       <textarea id="context" class="context" bind:this={contextInput} bind:value={context} placeholder={t("composer.contextPlaceholder")}></textarea>
     </section>
 
@@ -160,7 +161,7 @@
       <section class="draft-card">
         <div class="field-label"><label for="draft">{t("composer.draft")}</label>{#if draftMatchesRequest()}<span class="ready"><i></i> {t("composer.ready")}</span>{:else}<span class="stale" role="status">{t("composer.stale")}</span>{/if}</div>
         <textarea id="draft" class="draft" bind:value={draft}></textarea>
-        <div class="actions"><button class="secondary" onclick={copy}>{copied ? t("composer.copied") : t("composer.copy")}</button><button class="insert" onclick={insert} disabled={inserting || !draftMatchesRequest()} title={draftMatchesRequest() ? undefined : t("composer.staleTooltip")}>{inserting ? "Inserting…" : t("composer.insert")}</button></div>
+        <div class="actions"><button class="secondary" onclick={copy}>{copied ? t("composer.copied") : t("composer.copy")}</button><button class="insert" onclick={insert} disabled={inserting || !draftMatchesRequest()} title={draftMatchesRequest() ? undefined : t("composer.staleTooltip")}>{inserting ? t("composer.inserting") : t("composer.insert")}</button></div>
       </section>
     {/if}
   </section>
