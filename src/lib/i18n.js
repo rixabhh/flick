@@ -43,7 +43,9 @@ const messages = {
     "tone.Custom": "Custom",
     "dictation.recording": "Recording",
     "dictation.transcribing": "Transcribing locally",
+    "dictation.transcribingCloud": "Transcribing with your provider",
     "dictation.private": "Your audio stays on this device",
+    "dictation.cloud": "Audio is sent only to your configured provider",
     "dictation.discard": "Press Esc to discard",
   },
   es: {
@@ -90,7 +92,9 @@ const messages = {
     "tone.Custom": "Personalizado",
     "dictation.recording": "Grabando",
     "dictation.transcribing": "Transcribiendo localmente",
+    "dictation.transcribingCloud": "Transcribiendo con tu proveedor",
     "dictation.private": "Tu audio permanece en este dispositivo",
+    "dictation.cloud": "El audio se envía solo a tu proveedor configurado",
     "dictation.discard": "Pulsa Esc para descartar",
   },
 };

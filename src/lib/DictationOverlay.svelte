@@ -6,18 +6,25 @@
 
   let state = $state("recording");
   let language = $state("en");
+  let cloudTranscription = $state(false);
   const t = (key) => translate(language, key);
+
+  async function refreshPresentationConfig() {
+    try {
+      const config = await invoke("get_config");
+      language = config.app_language === "es" ? "es" : "en";
+      cloudTranscription = config.dictation_provider === "cloud-openai-compatible";
+    } catch {}
+  }
 
   onMount(() => {
     let disposed = false;
     let unlisten = () => {};
     void (async () => {
-      try {
-        const config = await invoke("get_config");
-        language = config.app_language === "es" ? "es" : "en";
-      } catch {}
+      await refreshPresentationConfig();
       const dispose = await listen("flick://dictation-state", (event) => {
         state = String(event.payload || "recording");
+        if (state === "transcribing") void refreshPresentationConfig();
       });
       if (disposed) dispose();
       else unlisten = dispose;
@@ -25,7 +32,12 @@
     return () => { disposed = true; unlisten(); };
   });
 
-  const label = () => state === "transcribing" ? t("dictation.transcribing") : t("dictation.recording");
+  const label = () => state === "transcribing"
+    ? t(cloudTranscription ? "dictation.transcribingCloud" : "dictation.transcribing")
+    : t("dictation.recording");
+  const detail = () => state === "transcribing"
+    ? t(cloudTranscription ? "dictation.cloud" : "dictation.private")
+    : t("dictation.discard");
 </script>
 
 <main class:processing={state === "transcribing"} class="overlay" aria-live="polite" aria-label={`Dictation ${label()}`}>
@@ -38,7 +50,7 @@
   </div>
   <div class="copy">
     <strong>{label()}</strong>
-    <small><span class="privacy-dot"></span>{state === "transcribing" ? t("dictation.private") : t("dictation.discard")}</small>
+    <small><span class="privacy-dot"></span>{detail()}</small>
   </div>
 </main>
 
