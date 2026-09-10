@@ -23,9 +23,24 @@ const BUILTIN_TRIGGERS: &[&str] = &[
 
 fn sync_config_state(app: &AppHandle, cfg: &config::FlickConfig) {
     if let Some(state) = app.try_state::<crate::AppState>() {
-        *state.config.lock().unwrap() = cfg.clone();
-        *state.enabled.lock().unwrap() = cfg.enabled;
-        *state.custom_triggers.lock().unwrap() = config::get_custom_trigger_names(cfg);
+        // The configuration has already been safely persisted before this
+        // best-effort hot-state update. A poisoned lock must not turn a
+        // recoverable settings save into a desktop-process panic.
+        if let Ok(mut current) = state.config.lock() {
+            *current = cfg.clone();
+        } else {
+            log::warn!("Could not refresh the in-memory Flick configuration after saving");
+        }
+        if let Ok(mut enabled) = state.enabled.lock() {
+            *enabled = cfg.enabled;
+        } else {
+            log::warn!("Could not refresh Flick's in-memory enabled state after saving");
+        }
+        if let Ok(mut triggers) = state.custom_triggers.lock() {
+            *triggers = config::get_custom_trigger_names(cfg);
+        } else {
+            log::warn!("Could not refresh Flick's in-memory custom triggers after saving");
+        }
     }
 }
 

@@ -75,7 +75,12 @@ pub fn setup_tray(app: &AppHandle) -> Result<()> {
 /// Handle the "Enabled" toggle from the tray menu.
 fn handle_toggle_enabled(app: &AppHandle) {
     if let Some(state) = app.try_state::<crate::AppState>() {
-        let mut enabled = state.enabled.lock().unwrap();
+        let Ok(mut enabled) = state.enabled.lock() else {
+            // Keep the menu event recoverable. The persisted configuration is
+            // untouched and Flick stays open so the user can retry or restart.
+            log::warn!("Could not toggle Flick because the enabled-state lock is unavailable");
+            return;
+        };
         *enabled = !*enabled;
         let new_val = *enabled;
         drop(enabled);

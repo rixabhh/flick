@@ -237,7 +237,7 @@ fn run_hook_loop(app: AppHandle) {
         // Check if Flick is enabled
         let is_enabled = app
             .try_state::<AppState>()
-            .map(|s| *s.enabled.lock().unwrap())
+            .and_then(|s| s.enabled.lock().ok().map(|enabled| *enabled))
             .unwrap_or(false);
 
         if !is_enabled {
@@ -272,7 +272,12 @@ fn run_hook_loop(app: AppHandle) {
                 let tail = text_buffer.get_tail(40);
                 let custom_triggers = app
                     .try_state::<AppState>()
-                    .map(|s| s.custom_triggers.lock().unwrap().clone())
+                    .and_then(|s| {
+                        s.custom_triggers
+                            .lock()
+                            .ok()
+                            .map(|triggers| triggers.clone())
+                    })
                     .unwrap_or_default();
 
                 if let Some(trigger_match) = trigger::detect(&tail, &custom_triggers) {
@@ -302,14 +307,15 @@ fn run_hook_loop(app: AppHandle) {
                     // Get config values needed for runtime behavior
                     let (show_done_toast, provider, model, custom_base_url) = app
                         .try_state::<AppState>()
-                        .map(|s| {
-                            let cfg = s.config.lock().unwrap();
-                            (
-                                cfg.show_done_toast,
-                                cfg.provider.clone(),
-                                cfg.model.clone(),
-                                cfg.custom_base_url.clone(),
-                            )
+                        .and_then(|s| {
+                            s.config.lock().ok().map(|cfg| {
+                                (
+                                    cfg.show_done_toast,
+                                    cfg.provider.clone(),
+                                    cfg.model.clone(),
+                                    cfg.custom_base_url.clone(),
+                                )
+                            })
                         })
                         .unwrap_or((
                             true,
@@ -351,11 +357,12 @@ fn run_hook_loop(app: AppHandle) {
                         // Find the custom command prompt
                         let prompt_template = {
                             if let Some(state) = app.try_state::<AppState>() {
-                                let cfg = state.config.lock().unwrap();
-                                cfg.custom_commands
-                                    .iter()
-                                    .find(|c| c.trigger == trigger_match.command)
-                                    .map(|c| c.prompt.clone())
+                                state.config.lock().ok().and_then(|cfg| {
+                                    cfg.custom_commands
+                                        .iter()
+                                        .find(|c| c.trigger == trigger_match.command)
+                                        .map(|c| c.prompt.clone())
+                                })
                             } else {
                                 None
                             }
