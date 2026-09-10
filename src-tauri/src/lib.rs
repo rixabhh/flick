@@ -466,7 +466,11 @@ fn run_hook_loop(app: AppHandle) {
             }
             HookEvent::CopyLastResult => match history::copy_last_result(&app) {
                 Ok(true) => {
-                    let _ = app.emit("flick://toast", "Last result copied");
+                    // The overlay owns presentation and localization. A unit
+                    // payload lets it show the selected UI language instead
+                    // of leaking an English backend string into the status
+                    // pill.
+                    let _ = app.emit("flick://toast", ());
                 }
                 Ok(false) => {
                     let _ = app.emit(

@@ -1,13 +1,21 @@
 <script>
   import { listen } from "@tauri-apps/api/event";
+  import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
+  import { translate } from "./i18n.js";
 
-  let state = $state("idle"); // idle | transforming | done | error
+  let state = $state("idle"); // idle | transforming | done | error | notice
   let errorMessage = $state("");
+  let noticeMessage = $state("");
+  let language = $state("en");
   let fadeTimer = $state(null);
+  const t = (key) => translate(language, key);
 
   onMount(() => {
+    void invoke("get_config")
+      .then((config) => language = config.app_language === "es" ? "es" : "en")
+      .catch(() => {});
     const unlisten1 = listen("flick://transforming", () => {
       clearTimers();
       state = "transforming";
@@ -39,11 +47,23 @@
       hideWindow();
     });
 
+    const unlisten5 = listen("flick://toast", (event) => {
+      clearTimers();
+      noticeMessage = String(event.payload || t("transform.copied"));
+      state = "notice";
+      showWindow();
+      fadeTimer = setTimeout(() => {
+        state = "idle";
+        hideWindow();
+      }, 1800);
+    });
+
     return () => {
       unlisten1.then((dispose) => dispose());
       unlisten2.then((dispose) => dispose());
       unlisten3.then((dispose) => dispose());
       unlisten4.then((dispose) => dispose());
+      unlisten5.then((dispose) => dispose());
       clearTimers();
     };
   });
@@ -68,17 +88,22 @@
   {#if state === "transforming"}
     <div class="toast toast-transforming" role="status">
       <span class="status-icon spinner" aria-hidden="true"></span>
-      <span class="toast-copy"><strong>Transforming</strong><small>Making your text clearer</small></span>
+      <span class="toast-copy"><strong>{t("transform.transforming")}</strong><small>{t("transform.transformingDetail")}</small></span>
     </div>
   {:else if state === "done"}
     <div class="toast toast-done" role="status">
       <span class="status-icon success" aria-hidden="true">✓</span>
-      <span class="toast-copy"><strong>Ready</strong><small>Text replaced successfully</small></span>
+      <span class="toast-copy"><strong>{t("transform.ready")}</strong><small>{t("transform.replaced")}</small></span>
     </div>
   {:else if state === "error"}
     <div class="toast toast-error" role="alert">
       <span class="status-icon warning" aria-hidden="true">!</span>
-      <span class="toast-copy"><strong>Couldn’t transform</strong><small>{errorMessage}</small></span>
+      <span class="toast-copy"><strong>{t("transform.failed")}</strong><small>{errorMessage}</small></span>
+    </div>
+  {:else if state === "notice"}
+    <div class="toast toast-done" role="status">
+      <span class="status-icon success" aria-hidden="true">✓</span>
+      <span class="toast-copy"><strong>{t("transform.copied")}</strong><small>{noticeMessage}</small></span>
     </div>
   {/if}
 </div>

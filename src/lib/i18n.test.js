@@ -7,6 +7,7 @@ describe("localization", () => {
     expect(translate("es", "home.title")).toBe("Tu espacio de escritura");
     expect(translate("es", "composer.stale")).toBe("Regenera antes de insertar");
     expect(translate("es", "dictation.transcribingCloud")).toBe("Transcribiendo con tu proveedor");
+    expect(translate("es", "transform.copied")).toBe("Copiado al portapapeles");
   });
 
   it("falls back safely to English for missing languages or keys", () => {
