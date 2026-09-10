@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{Mutex, MutexGuard};
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 
 use crate::{active_target, ai_client};
 
@@ -19,16 +19,28 @@ const CLIPBOARD_COPY_DELAY: Duration = Duration::from_millis(30);
 const CLIPBOARD_COPY_TIMEOUT: Duration = Duration::from_millis(750);
 const CLIPBOARD_RESTORE_DELAY: Duration = Duration::from_millis(100);
 const PASTE_DELAY: Duration = Duration::from_millis(35);
+const CLIPBOARD_ACCESS_TIMEOUT: Duration = Duration::from_secs(3);
 
 // One persistent handle also keeps restored/copied data available on Linux,
 // where dropping the last arboard handle relinquishes clipboard ownership.
 static CLIPBOARD: Mutex<Option<Clipboard>> = Mutex::const_new(None);
 static COPY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
-fn clipboard_access() -> Result<MutexGuard<'static, Option<Clipboard>>> {
-    let mut state = CLIPBOARD.try_lock().map_err(|_| {
-        anyhow::anyhow!("Flick is finishing another copy or paste. Please try again in a moment.")
-    })?;
+async fn wait_for_clipboard_slot(
+    max_wait: Duration,
+) -> Result<MutexGuard<'static, Option<Clipboard>>> {
+    timeout(max_wait, CLIPBOARD.lock()).await.map_err(|_| {
+        anyhow::anyhow!(
+            "The clipboard stayed busy for too long. Flick did not copy or paste anything."
+        )
+    })
+}
+
+async fn clipboard_access() -> Result<MutexGuard<'static, Option<Clipboard>>> {
+    // Clipboard transactions are intentionally short. Queue a nearby composer,
+    // transform, history, or dictation operation instead of turning harmless
+    // overlap into an immediate user-facing failure.
+    let mut state = wait_for_clipboard_slot(CLIPBOARD_ACCESS_TIMEOUT).await?;
     if state.is_none() {
         *state = Some(Clipboard::new().context("Failed to access clipboard")?);
     }
@@ -37,8 +49,9 @@ fn clipboard_access() -> Result<MutexGuard<'static, Option<Clipboard>>> {
 
 /// Explicit Copy actions share the same lock as temporary clipboard use.
 /// Otherwise a delayed paste restoration could erase a freshly copied draft.
-pub fn copy_text_to_clipboard(text: &str) -> Result<()> {
-    clipboard_access()?
+pub async fn copy_text_to_clipboard(text: &str) -> Result<()> {
+    clipboard_access()
+        .await?
         .as_mut()
         .context("Clipboard is unavailable")?
         .set_text(text.to_owned())
@@ -141,8 +154,8 @@ struct ClipboardTransaction {
 }
 
 impl ClipboardTransaction {
-    fn begin() -> Result<Self> {
-        let mut state = clipboard_access()?;
+    async fn begin() -> Result<Self> {
+        let mut state = clipboard_access().await?;
         let original = snapshot_clipboard(state.as_mut().context("Clipboard is unavailable")?)?;
         Ok(Self {
             state,
@@ -393,7 +406,7 @@ pub async fn capture_selected_text() -> Result<String> {
 }
 
 async fn capture_text(target: &active_target::ActiveTarget, select_all: bool) -> Result<String> {
-    let mut transaction = ClipboardTransaction::begin()?;
+    let mut transaction = ClipboardTransaction::begin().await?;
     let sentinel = format!(
         "__flick_selection_probe_{}_{}__",
         std::process::id(),
@@ -439,7 +452,7 @@ pub async fn paste_text_transaction(text: &str) -> Result<()> {
 }
 
 async fn paste_text_in_target(text: &str, target: &active_target::ActiveTarget) -> Result<()> {
-    let mut transaction = ClipboardTransaction::begin()?;
+    let mut transaction = ClipboardTransaction::begin().await?;
     transaction.set_text(text.to_owned())?;
     verify_original_target(target)?;
     simulate_key_chord('v')?;
@@ -452,7 +465,7 @@ async fn paste_text_in_target(text: &str, target: &active_target::ActiveTarget) 
 /// Paste the plain text representation with the same transaction guarantees.
 pub async fn paste_plain_text_from_clipboard() -> Result<()> {
     let target = active_target::get().context("Flick could not verify the target app")?;
-    let mut transaction = ClipboardTransaction::begin()?;
+    let mut transaction = ClipboardTransaction::begin().await?;
     let text = transaction
         .get_text()
         .context("Clipboard does not contain text to paste")?;
@@ -552,13 +565,22 @@ mod tests {
         assert!(!still_owns_clipboard("temporary", None, None, None));
     }
 
-    #[test]
-    fn concurrent_clipboard_transactions_refuse_to_interleave() {
-        // Hold the production lock without initializing a native handle.
-        // Both transaction setup and explicit Copy must refuse before touching
-        // the system clipboard.
-        let _first = CLIPBOARD.try_lock().unwrap();
-        assert!(clipboard_access().is_err());
-        assert!(copy_text_to_clipboard("must not be copied").is_err());
+    #[tokio::test]
+    async fn concurrent_clipboard_transactions_wait_without_interleaving() {
+        // Hold the production lock without initializing a native handle. The
+        // next operation must wait rather than fail instantly, then acquire the
+        // slot as soon as the first operation restores the clipboard.
+        let first = CLIPBOARD.lock().await;
+        let waiting = wait_for_clipboard_slot(Duration::from_millis(250));
+        tokio::pin!(waiting);
+        tokio::select! {
+            _ = sleep(Duration::from_millis(20)) => {}
+            _ = &mut waiting => panic!("clipboard waiter completed before the first transaction released it"),
+        }
+        drop(first);
+        let second = waiting
+            .await
+            .expect("clipboard waiter should acquire released slot");
+        drop(second);
     }
 }

@@ -72,6 +72,9 @@ pub async fn open_from_shortcut(app: &AppHandle) {
             return;
         }
     }
+    // Capture the pointer before clipboard interaction; put the companion on
+    // that monitor, bounded by its usable work area (including scaled screens).
+    let pointer = app.cursor_position().ok();
     // Capture identity before Flick's own window is visible. The selected text
     // itself remains renderer-only and is deliberately not stored here. This
     // check belongs here—not only in the global hook—because CLI and tray
@@ -94,6 +97,26 @@ pub async fn open_from_shortcut(app: &AppHandle) {
         }
     };
     if let Some(window) = app.get_webview_window("composer") {
+        if let Some(pointer) = pointer {
+            if let Ok(Some(monitor)) = window.monitor_from_point(pointer.x, pointer.y) {
+                let scale = monitor.scale_factor();
+                let area = monitor.work_area();
+                let width = (364.0 * scale).min(area.size.width as f64);
+                let height = (430.0 * scale).min(area.size.height as f64);
+                let position = companion_position(
+                    (pointer.x, pointer.y),
+                    (area.position.x as f64, area.position.y as f64),
+                    (area.size.width as f64, area.size.height as f64),
+                    (width, height),
+                    14.0 * scale,
+                );
+                let _ = window.set_size(tauri::PhysicalSize::new(width as u32, height as u32));
+                let _ = window.set_position(tauri::PhysicalPosition::new(
+                    position.0 as i32,
+                    position.1 as i32,
+                ));
+            }
+        }
         // Context and the capture error stay renderer-only for this short-lived
         // composer session. Supplying the reason lets users recover from a
         // clipboard or selection problem without guessing why the draft opens
@@ -106,6 +129,29 @@ pub async fn open_from_shortcut(app: &AppHandle) {
         let _ = window.show();
         let _ = window.set_focus();
     }
+}
+
+fn companion_position(
+    pointer: (f64, f64),
+    origin: (f64, f64),
+    area: (f64, f64),
+    size: (f64, f64),
+    gap: f64,
+) -> (f64, f64) {
+    let x = if pointer.0 + gap + size.0 <= origin.0 + area.0 {
+        pointer.0 + gap
+    } else {
+        pointer.0 - gap - size.0
+    };
+    let y = if pointer.1 + gap + size.1 <= origin.1 + area.1 {
+        pointer.1 + gap
+    } else {
+        pointer.1 - gap - size.1
+    };
+    (
+        x.clamp(origin.0, origin.0 + (area.0 - size.0).max(0.0)),
+        y.clamp(origin.1, origin.1 + (area.1 - size.1).max(0.0)),
+    )
 }
 
 #[tauri::command]
@@ -269,6 +315,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn companion_stays_inside_scaled_and_negative_monitor_work_areas() {
+        for pointer in [(-1919.0, 1.0), (-1.0, 1079.0), (-960.0, 540.0)] {
+            let (x, y) = companion_position(
+                pointer,
+                (-1920.0, 0.0),
+                (1920.0, 1080.0),
+                (728.0, 860.0),
+                28.0,
+            );
+            assert!((-1920.0..=-728.0).contains(&x));
+            assert!((0.0..=220.0).contains(&y));
+        }
+    }
+
+    #[test]
     fn target_match_requires_the_same_foreground_application() {
         let expected = TargetIdentity {
             app_name: "slack".into(),
@@ -293,5 +354,6 @@ pub async fn copy_reply(draft: String) -> Result<(), String> {
         return Err("There is no draft to copy.".into());
     }
     replacer::copy_text_to_clipboard(&draft)
+        .await
         .map_err(|error| format!("Could not copy draft: {error}"))
 }

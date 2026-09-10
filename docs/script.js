@@ -1,5 +1,7 @@
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const header = document.querySelector("[data-header]");
+const menuToggle = document.querySelector("[data-menu-toggle]");
+const navigation = document.querySelector("[data-nav]");
 const revealTargets = document.querySelectorAll(".reveal");
 const steps = [...document.querySelectorAll("[data-step]")];
 const stages = [...document.querySelectorAll("[data-stage]")];
@@ -36,6 +38,26 @@ if ("IntersectionObserver" in window) {
 const updateHeader = () => header.classList.toggle("is-scrolled", window.scrollY > 12);
 window.addEventListener("scroll", updateHeader, { passive: true });
 updateHeader();
+
+const closeMenu = () => {
+  navigation?.classList.remove("is-open");
+  menuToggle?.setAttribute("aria-expanded", "false");
+};
+menuToggle?.addEventListener("click", () => {
+  const open = !navigation.classList.contains("is-open");
+  navigation.classList.toggle("is-open", open);
+  menuToggle.setAttribute("aria-expanded", String(open));
+});
+navigation?.querySelectorAll("a").forEach((link) => link.addEventListener("click", closeMenu));
+window.addEventListener("resize", () => {
+  if (window.innerWidth > 720) closeMenu();
+}, { passive: true });
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeMenu();
+    menuToggle?.focus();
+  }
+});
 
 if (!reduceMotion) {
   const floating = document.querySelectorAll("[data-float]");

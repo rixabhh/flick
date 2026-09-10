@@ -19,6 +19,8 @@ pub mod key_hook;
 pub mod keychain;
 pub mod models;
 pub mod replacer;
+pub mod shortcuts;
+pub mod transcription_worker;
 pub mod tray;
 pub mod trigger;
 
@@ -83,6 +85,7 @@ pub fn run() {
             dictation_provider::list_dictation_providers,
             diagnostics::export_diagnostics,
             models::list_local_models,
+            shortcuts::set_shortcut_capture,
             models::download_local_model,
             models::cancel_local_model_download,
             models::active_local_model_download,
@@ -219,9 +222,12 @@ fn handle_cli_args(app: &AppHandle, args: Vec<String>) {
             }
         }
         CliAction::CopyLastResult => {
-            if let Err(error) = history::copy_last_result(app) {
-                log::warn!("Could not copy last result: {error}");
-            }
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = history::copy_last_result(&app).await {
+                    log::warn!("Could not copy last result: {error}");
+                }
+            });
         }
     }
 }
@@ -250,6 +256,11 @@ fn run_hook_loop(app: AppHandle) {
             .unwrap_or(false);
 
         if !is_enabled {
+            if dictation::is_recording(&app) {
+                if let Err(error) = dictation::cancel(&app) {
+                    log::warn!("Could not discard recording after disabling Flick: {error}");
+                }
+            }
             // Still process events to keep the buffer sane, but skip triggers
             match event {
                 HookEvent::Char(_) => {}
@@ -271,6 +282,23 @@ fn run_hook_loop(app: AppHandle) {
                 | HookEvent::PastePlainText => {}
             }
             continue;
+        }
+
+        if matches!(event, HookEvent::CopyLastResult | HookEvent::PastePlainText) {
+            let protected = app
+                .try_state::<AppState>()
+                .and_then(|state| {
+                    state
+                        .config
+                        .lock()
+                        .ok()
+                        .map(|config| config.disabled_apps.clone())
+                })
+                .map(|apps| key_hook::active_app_is_protected(&apps))
+                .unwrap_or(true);
+            if protected {
+                continue;
+            }
         }
 
         match event {
@@ -431,6 +459,7 @@ fn run_hook_loop(app: AppHandle) {
                 text_buffer.clear();
             }
             HookEvent::OpenComposer => {
+                text_buffer.clear();
                 let app_clone = app.clone();
                 rt.spawn(async move {
                     composer::open_from_shortcut(&app_clone).await;
@@ -478,27 +507,30 @@ fn run_hook_loop(app: AppHandle) {
                 }
                 text_buffer.clear();
             }
-            HookEvent::CopyLastResult => match history::copy_last_result(&app) {
-                Ok(true) => {
-                    // The overlay owns presentation and localization. A unit
-                    // payload lets it show the selected UI language instead
-                    // of leaking an English backend string into the status
-                    // pill.
-                    let _ = app.emit("flick://toast", ());
-                }
-                Ok(false) => {
-                    let _ = app.emit(
-                        "flick://error",
-                        serde_json::json!({"message": "No local history entry is available to copy."}),
-                    );
-                }
-                Err(error) => {
-                    let _ = app.emit(
-                        "flick://error",
-                        serde_json::json!({"message": error.to_string()}),
-                    );
-                }
-            },
+            HookEvent::CopyLastResult => {
+                text_buffer.clear();
+                let app_clone = app.clone();
+                rt.spawn(async move {
+                    match history::copy_last_result(&app_clone).await {
+                        Ok(true) => {
+                            // The overlay owns presentation and localization.
+                            let _ = app_clone.emit("flick://toast", ());
+                        }
+                        Ok(false) => {
+                            let _ = app_clone.emit(
+                                "flick://error",
+                                serde_json::json!({"message": "No local history entry is available to copy."}),
+                            );
+                        }
+                        Err(error) => {
+                            let _ = app_clone.emit(
+                                "flick://error",
+                                serde_json::json!({"message": error.to_string()}),
+                            );
+                        }
+                    }
+                });
+            }
             HookEvent::PastePlainText => {
                 let app_clone = app.clone();
                 rt.spawn(async move {

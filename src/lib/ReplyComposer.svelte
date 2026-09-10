@@ -2,7 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { listen } from "@tauri-apps/api/event";
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { translate } from "./i18n.js";
 
   const tones = ["Casual", "Professional", "Warm", "Concise", "Assertive", "Custom"];
@@ -21,6 +21,9 @@
   let providerNotice = $state("");
   let language = $state("en");
   let contextInput = $state();
+  let intentInput = $state();
+  let contextExpanded = $state(true);
+  let requestExpanded = $state(true);
   let generateShortcut = $state("⌘ ↵");
   let session = 0;
   let copiedTimer;
@@ -59,6 +62,10 @@
       // the result with the exact request that left Flick, not whatever is in
       // the fields when the promise later resolves.
       draftSignature = signature;
+      if (signature === requestSignature()) {
+        requestExpanded = false;
+        contextExpanded = false;
+      }
     }
     catch (message) { if (currentSession === session) error = String(message); }
     finally { if (currentSession === session) loading = false; }
@@ -142,6 +149,10 @@
         // update together. The object form preserves a meaningful recovery
         // reason when selection capture could not safely complete.
         context = typeof payload === "string" ? payload : String(payload?.context || "");
+        instruction = "";
+        contextExpanded = !context;
+        requestExpanded = true;
+        void tick().then(() => context ? intentInput?.focus() : contextInput?.focus());
         draft = "";
         draftSignature = "";
         error = typeof payload === "object" && payload?.error
@@ -169,30 +180,34 @@
     <header data-tauri-drag-region>
       <div class="title-group" data-tauri-drag-region>
         <span class="composer-mark" aria-hidden="true">↗</span>
-        <div data-tauri-drag-region><span class="eyebrow">FLICK REPLY</span><h1 id="composer-title">{t("composer.title")}</h1></div>
+        <div data-tauri-drag-region><h1 id="composer-title">Flick Reply</h1><span class="eyebrow">{t("composer.title")}</span></div>
       </div>
       <button class="icon" aria-label={t("composer.close")} onclick={close} disabled={inserting}>×</button>
     </header>
 
-    <p class="privacy"><span aria-hidden="true">⌁</span><span>{t("composer.privacy")} {providerNotice}</span></p>
+    <p class="privacy" title={t("composer.privacy")}><span aria-hidden="true">⌁</span><span>{providerNotice}</span></p>
 
-    <section class="field-group">
+    <details class="field-group context-details" bind:open={contextExpanded}>
+      <summary>{t("composer.context")}<span>{context ? context.replace(/\s+/g, " ").slice(0, 64) : t("composer.contextPlaceholder")}</span></summary>
       <div class="field-label"><label for="context">{t("composer.context")}</label><button class="capture" onclick={captureSelection} disabled={capturing || loading || inserting}>{capturing ? t("composer.capturing") : t("composer.capture")}</button></div>
       <textarea id="context" class="context" bind:this={contextInput} bind:value={context} placeholder={t("composer.contextPlaceholder")}></textarea>
-    </section>
+    </details>
 
-    <section class="field-group">
-      <span class="label">{t("composer.tone")}</span>
-      <div class="tones" role="group" aria-label={t("composer.tone")}>
-        {#each tones as item}<button class:active={tone === item} aria-pressed={tone === item} onclick={() => tone = item}>{t(`tone.${item}`)}</button>{/each}
-      </div>
-      {#if tone === "Custom"}<input bind:value={customTone} placeholder={t("composer.customTone")} />{/if}
+    <details class="request-details" bind:open={requestExpanded}>
+      <summary class:initial={!draft}>{t("composer.intent")}<span>{instruction}</span></summary>
+    <section class="field-group tone-row">
+      <label for="tone">{t("composer.tone")}</label>
+      <select id="tone" bind:value={tone}>
+        {#each tones as item}<option value={item}>{t(`tone.${item}`)}</option>{/each}
+      </select>
+      {#if tone === "Custom"}<input aria-label={t("composer.customTone")} bind:value={customTone} placeholder={t("composer.customTone")} />{/if}
     </section>
 
     <section class="field-group">
       <div class="field-label"><label for="intent">{t("composer.intent")}</label><span class="shortcut">{generateShortcut}</span></div>
-      <textarea id="intent" class="intent" bind:value={instruction} placeholder={t("composer.intentPlaceholder")}></textarea>
+      <textarea id="intent" class="intent" bind:this={intentInput} bind:value={instruction} placeholder={t("composer.intentPlaceholder")}></textarea>
     </section>
+    </details>
 
     <button class="generate" onclick={generate} disabled={loading || capturing || inserting || !context.trim() || !instruction.trim()}>
       {#if loading}<span class="mini-spinner" aria-hidden="true"></span>{/if}
@@ -211,37 +226,44 @@
 </div>
 
 <style>
-  .composer { height:100vh; overflow:auto; padding:14px; color:#f5f7fb; background:radial-gradient(circle at 20% -10%,rgba(122,158,255,.16),transparent 40%),linear-gradient(145deg,#171a22,#0e1015); font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",system-ui,sans-serif; }
-  .window-surface { min-height:100%; padding:18px; border:1px solid rgba(255,255,255,.12); border-radius:20px; background:linear-gradient(145deg,rgba(42,47,59,.72),rgba(21,23,30,.8)); box-shadow:inset 0 1px rgba(255,255,255,.1),0 20px 50px rgba(0,0,0,.25); backdrop-filter:blur(28px) saturate(1.25); -webkit-backdrop-filter:blur(28px) saturate(1.25); }
+  :global(html),:global(body) { margin:0; background:transparent; overflow:hidden; }
+  .composer { height:100vh; overflow:auto; padding:5px; box-sizing:border-box; color:#f5f7fb; background:transparent; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",system-ui,sans-serif; scrollbar-width:none; }
+  .composer::-webkit-scrollbar { display:none; }
+  .window-surface { min-height:calc(100% - 10px); padding:13px; box-sizing:border-box; border:1px solid rgba(255,255,255,.18); border-radius:22px; background:radial-gradient(260px 170px at 18% -8%,rgba(255,255,255,.14),transparent 68%),linear-gradient(145deg,rgba(45,48,57,.84),rgba(18,20,25,.9)); box-shadow:0 18px 44px rgba(0,0,0,.32),inset 0 1px rgba(255,255,255,.14),inset 0 -1px rgba(0,0,0,.22); backdrop-filter:blur(30px) saturate(1.5); -webkit-backdrop-filter:blur(30px) saturate(1.5); animation:companion-in 420ms cubic-bezier(.22,1,.36,1) both; }
   header,.title-group,.field-label,.actions { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-  header { padding:1px 0 14px; }
+  header { padding:1px 0 10px; }
   .title-group { justify-content:flex-start; }
-  .composer-mark { display:grid; place-items:center; width:30px; height:30px; border-radius:10px; color:#c9dcff; background:linear-gradient(145deg,rgba(132,170,255,.3),rgba(76,105,186,.17)); border:1px solid rgba(176,204,255,.28); font-size:17px; box-shadow:inset 0 1px rgba(255,255,255,.2); }
-  h1 { margin:1px 0 0; font-size:17px; line-height:1.1; letter-spacing:-.025em; }
-  .eyebrow { color:#9fc1ff; font-size:9px; font-weight:750; letter-spacing:.14em; }
-  .icon { display:grid; place-items:center; width:28px; height:28px; border:1px solid transparent; border-radius:50%; background:rgba(255,255,255,.07); color:rgba(255,255,255,.68); cursor:pointer; font-size:20px; line-height:1; transition:background 150ms ease,transform 150ms ease,color 150ms ease; }
+  .composer-mark { display:grid; place-items:center; width:28px; height:28px; border-radius:50%; color:#d4e2ff; background:linear-gradient(145deg,rgba(152,183,255,.28),rgba(76,105,186,.12)); border:1px solid rgba(191,212,255,.24); font-size:15px; box-shadow:inset 0 1px rgba(255,255,255,.2),0 5px 14px rgba(53,87,154,.16); }
+  h1 { margin:0 0 3px; font-size:14px; line-height:1.1; letter-spacing:-.025em; }
+  .eyebrow { color:rgba(235,240,249,.5); font-size:10px; }
+  .icon { display:grid; place-items:center; width:26px; height:26px; border:1px solid rgba(255,255,255,.06); border-radius:50%; background:rgba(255,255,255,.06); color:rgba(255,255,255,.68); cursor:pointer; font-size:18px; line-height:1; transition:background 150ms ease,transform 150ms ease,color 150ms ease; }
   .icon:hover { color:white; background:rgba(255,107,107,.26); transform:scale(1.05); }
-  .privacy { display:flex; gap:8px; margin:0 0 16px; padding:9px 10px; border:1px solid rgba(163,195,255,.13); border-radius:11px; color:rgba(227,234,248,.67); background:rgba(111,149,229,.08); font-size:10px; line-height:1.42; }
+  .privacy { display:flex; gap:8px; margin:0 0 10px; color:rgba(227,234,248,.67); font-size:10px; line-height:1.42; }
   .privacy > :first-child { color:#b8d0ff; font-size:14px; line-height:1; }
-  .field-group { margin-top:13px; }
+  .field-group { margin-top:10px; }
+  summary { cursor:pointer; font-size:11px; color:rgba(243,246,253,.76); }
+  summary span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:rgba(235,240,249,.45); font-size:10px; margin:5px 0; }
+  .context-details { border-bottom:1px solid rgba(255,255,255,.08); padding-bottom:7px; }
+  .tone-row { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+  .tone-row select { width:auto; min-width:120px; }
+  .request-details { margin-top:9px; }.initial { display:none; }
+  select { margin-left:auto; border:1px solid rgba(255,255,255,.12); border-radius:7px; padding:5px 8px; color:#e5ebf5; background:#282d38; font-size:11px; }
   .field-label { margin-bottom:6px; }
-  label,.label { display:block; color:rgba(243,246,253,.76); font-size:11px; font-weight:650; letter-spacing:.01em; }
-  textarea,input { width:100%; border:1px solid rgba(255,255,255,.11); border-radius:11px; color:#f5f7fb; background:rgba(8,10,15,.4); box-shadow:inset 0 1px 2px rgba(0,0,0,.15); font:inherit; font-size:12px; line-height:1.45; padding:10px; resize:vertical; transition:border-color 150ms ease,box-shadow 150ms ease,background 150ms ease; }
+  label { display:block; color:rgba(243,246,253,.76); font-size:11px; font-weight:650; letter-spacing:.01em; }
+  textarea,input { width:100%; border:1px solid rgba(255,255,255,.11); border-radius:13px; color:#f5f7fb; background:rgba(8,10,15,.34); box-shadow:inset 0 1px 2px rgba(0,0,0,.15),inset 0 1px rgba(255,255,255,.025); font:inherit; font-size:12px; line-height:1.45; padding:9px; resize:vertical; transition:border-color 150ms ease,box-shadow 150ms ease,background 150ms ease; }
   textarea:focus,input:focus { border-color:rgba(151,188,255,.76); background:rgba(8,10,15,.58); box-shadow:0 0 0 3px rgba(124,164,255,.16),inset 0 1px 2px rgba(0,0,0,.2); }
   textarea::placeholder,input::placeholder { color:rgba(224,231,244,.32); }
   .context { min-height:70px; }.intent { min-height:52px; }.draft { min-height:90px; }
   .capture { border:0; border-radius:7px; padding:3px 6px; color:#aac9ff; background:transparent; cursor:pointer; font-size:10px; font-weight:650; transition:background 150ms ease,color 150ms ease; }.capture:hover:not(:disabled){background:rgba(142,181,255,.13);color:#d7e5ff}.capture:disabled{opacity:.55;cursor:wait}
   .shortcut { padding:2px 5px; border:1px solid rgba(255,255,255,.11); border-radius:5px; color:rgba(235,240,249,.47); background:rgba(255,255,255,.05); font-size:9px; }
-  .tones { display:flex; flex-wrap:wrap; gap:5px; }.tones button { border:1px solid rgba(255,255,255,.1); border-radius:999px; padding:5px 8px; color:rgba(240,244,252,.66); background:rgba(255,255,255,.045); cursor:pointer; font-size:10px; font-weight:600; transition:all 160ms ease; }.tones button:hover{border-color:rgba(175,202,255,.35);color:#f7f9ff}.tones button.active{border-color:rgba(153,190,255,.55);color:#dbe8ff;background:linear-gradient(145deg,rgba(107,151,239,.31),rgba(93,127,195,.2));box-shadow:inset 0 1px rgba(255,255,255,.13)}
-  .tones + input { margin-top:7px; }
-  .generate,.insert,.secondary { display:inline-flex; align-items:center; justify-content:center; min-height:36px; border-radius:10px; cursor:pointer; font-size:11px; font-weight:700; transition:transform 150ms ease,filter 150ms ease,border-color 150ms ease,background 150ms ease; }
+  .generate,.insert,.secondary { display:inline-flex; align-items:center; justify-content:center; min-height:34px; border-radius:999px; cursor:pointer; font-size:11px; font-weight:700; transition:transform 150ms ease,filter 150ms ease,border-color 150ms ease,background 150ms ease; }
   .generate { width:100%; gap:7px; margin-top:17px; border:1px solid rgba(204,223,255,.5); color:#10213d; background:linear-gradient(180deg,#d7e6ff,#9fc0f8); box-shadow:inset 0 1px rgba(255,255,255,.72),0 6px 16px rgba(86,139,232,.2); }.generate:hover:not(:disabled),.insert:hover:not(:disabled){filter:brightness(1.06);transform:translateY(-1px)}.generate:active:not(:disabled),.insert:active:not(:disabled),.secondary:active{transform:translateY(1px) scale(.985)}.generate:disabled,.insert:disabled{opacity:.48;cursor:not-allowed}
   .mini-spinner { width:12px; height:12px; border:1.5px solid rgba(16,33,61,.26); border-top-color:#10213d; border-radius:50%; animation:spin .8s linear infinite; }
   .error { display:flex; gap:6px; margin:10px 0 0; padding:8px 9px; border:1px solid rgba(255,130,130,.2); border-radius:9px; color:#ffd1d1; background:rgba(210,63,63,.12); font-size:10px; line-height:1.35; }.error > :first-child{display:grid;place-items:center;flex:0 0 14px;width:14px;height:14px;border-radius:50%;color:#ffbcbc;background:rgba(255,132,132,.2);font-weight:800}
-  .draft-card { margin-top:14px; padding:11px; border:1px solid rgba(153,193,255,.16); border-radius:14px; background:rgba(122,159,236,.075); animation:reveal 220ms cubic-bezier(.2,.8,.2,1) both; }
+  .draft-card { margin-top:12px; padding:10px; border:1px solid rgba(153,193,255,.16); border-radius:17px; background:rgba(122,159,236,.065); animation:reveal 260ms cubic-bezier(.22,1,.36,1) both; }
   .ready { display:flex; align-items:center; gap:4px; color:rgba(190,240,207,.84); font-size:9px; }.ready i{width:5px;height:5px;border-radius:50%;background:#88e5a7;box-shadow:0 0 7px rgba(136,229,167,.7)}
   .stale { color:#ffd69a; font-size:9px; }
   .actions { margin-top:8px; }.secondary,.insert { flex:1; border:1px solid rgba(255,255,255,.13); }.secondary { color:rgba(247,249,255,.85); background:rgba(255,255,255,.07); }.secondary:hover{border-color:rgba(193,213,255,.35);background:rgba(255,255,255,.11)}.insert { color:#10213d; background:linear-gradient(180deg,#d7e6ff,#9fc0f8); border-color:rgba(204,223,255,.5); }
-  @keyframes spin { to { transform:rotate(360deg); } }@keyframes reveal { from{opacity:0;transform:translateY(6px) scale(.985)}to{opacity:1;transform:none} }
+  @keyframes spin { to { transform:rotate(360deg); } }@keyframes reveal { from{opacity:0;transform:translateY(6px) scale(.975)}to{opacity:1;transform:none} }@keyframes companion-in{from{opacity:0;transform:translateY(7px) scale(.95);filter:blur(4px)}to{opacity:1;transform:none;filter:none}}
   @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration:.01ms!important; transition-duration:.01ms!important; } }
 </style>

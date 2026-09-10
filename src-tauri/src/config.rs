@@ -315,6 +315,7 @@ pub fn save_config(app: &AppHandle, config: &FlickConfig) -> Result<()> {
     if path.exists() {
         load_at(&path)?;
     }
+    crate::shortcuts::validate_config(config).map_err(anyhow::Error::msg)?;
     save_at(&path, config)?;
     sync_state(app, config);
     Ok(())
@@ -353,7 +354,11 @@ pub fn merge_fields(config: &FlickConfig, patch: serde_json::Value) -> Result<Fl
         );
         object.insert(key.clone(), value.clone());
     }
-    serde_json::from_value(value).context("Invalid setting value")
+    let config = serde_json::from_value(value).context("Invalid setting value")?;
+    if patch.keys().any(|key| key.ends_with("_shortcut")) {
+        crate::shortcuts::validate_config(&config).map_err(anyhow::Error::msg)?;
+    }
+    Ok(config)
 }
 
 fn sync_state(app: &AppHandle, config: &FlickConfig) {

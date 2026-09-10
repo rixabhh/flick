@@ -1,6 +1,6 @@
 [package]
 name = "flick"
-version = "2.0.0"
+version = "2.0.1"
 description = "Type. Trigger. Done. - A global text transformation utility."
 authors = ["Flick"]
 edition = "2021"
@@ -40,6 +40,10 @@ tauri-plugin-opener = "2"
 
 [target.'cfg(windows)'.dependencies]
 uiautomation = "0.25"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "libc", "NSWorkspace", "NSRunningApplication"] }
 
 # This crate uses an AppKit bindgen build script that currently crashes on
 # hosted Apple Silicon runners. macOS uses the native AppKit query in

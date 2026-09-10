@@ -42,6 +42,11 @@ pub struct ModelInfo {
     pub supports_language_detection: bool,
     pub supported_languages: Vec<String>,
     pub size_bytes: u64,
+    pub group: String,
+    pub quant: String,
+    pub recommended: bool,
+    pub license: String,
+    pub source_url: String,
     /// The binary is present but has not yet been verified by Flick. This is
     /// deliberately separate from `installed`: opening Models must never read
     /// gigabytes of data just to render a settings page.
@@ -60,158 +65,20 @@ struct CatalogModel {
     sha256: &'static str,
     size_bytes: u64,
     english_only: bool,
+    group: &'static str,
+    quant: &'static str,
+    engine: &'static str,
+    supported_languages: &'static [&'static str],
+    supports_translation: bool,
+    supports_language_detection: bool,
+    recommended: bool,
+    license: &'static str,
+    source_url: &'static str,
 }
 
-// The checksums are Git LFS object IDs published by the model repository.
-// Keep this catalog deliberately small for the first-run experience; users may
-// also put compatible ggml models in Flick's models directory.
-const CATALOG: &[CatalogModel] = &[CatalogModel {
-    id: "whisper-tiny-en",
-    name: "Whisper Tiny English",
-    description: "Fastest local English dictation model; ideal for testing and low-end devices.",
-    language: "English",
-    file_name: "ggml-tiny.en.bin",
-    url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.en.bin?download=true",
-    sha256: "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f",
-    size_bytes: 77_704_715,
-    english_only: true,
-}, CatalogModel {
-    id: "whisper-base-multilingual",
-    name: "Whisper Base Multilingual",
-    description: "Balanced local dictation and English translation across supported languages.",
-    language: "Multilingual",
-    file_name: "ggml-base.bin",
-    url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base.bin?download=true",
-    sha256: "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
-    size_bytes: 147_951_465,
-    english_only: false,
-}, CatalogModel {
-    id: "whisper-base-en",
-    name: "Whisper Base English",
-    description: "Balanced local English dictation model for most laptops.",
-    language: "English",
-    file_name: "ggml-base.en.bin",
-    url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base.en.bin?download=true",
-    sha256: "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002",
-    size_bytes: 147_964_211,
-    english_only: true,
-}, CatalogModel {
-    id: "whisper-small-multilingual",
-    name: "Whisper Small Multilingual",
-    description: "Higher-accuracy local dictation and English translation across supported languages.",
-    language: "Multilingual",
-    file_name: "ggml-small.bin",
-    url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.bin?download=true",
-    sha256: "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
-    size_bytes: 487_601_967,
-    english_only: false,
-}, CatalogModel {
-    id: "whisper-small-en",
-    name: "Whisper Small English",
-    description: "Higher-accuracy local English dictation; needs more memory and CPU.",
-    language: "English",
-    file_name: "ggml-small.en.bin",
-    url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.en.bin?download=true",
-    sha256: "c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d",
-    size_bytes: 487_614_201,
-    english_only: true,
-}, CatalogModel {
-    id: "whisper-tiny-multilingual",
-    name: "Whisper Tiny Multilingual",
-    description: "Fast local dictation and English translation across supported languages.",
-    language: "Multilingual",
-    file_name: "ggml-tiny.bin",
-    url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.bin?download=true",
-    sha256: "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
-    size_bytes: 77_691_713,
-    english_only: false,
-}, CatalogModel {
-    id: "whisper-medium-multilingual",
-    name: "Whisper Medium Multilingual",
-    description: "High-accuracy multilingual dictation; requires substantial memory and CPU/GPU capacity.",
-    language: "Multilingual",
-    file_name: "ggml-medium.bin",
-    url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-medium.bin?download=true",
-    sha256: "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208",
-    size_bytes: 1_533_763_059,
-    english_only: false,
-}, CatalogModel {
-    id: "whisper-large-v3-turbo",
-    name: "Whisper Large v3 Turbo",
-    description: "Fast, high-accuracy multilingual dictation for powerful computers.",
-    language: "Multilingual",
-    file_name: "ggml-large-v3-turbo.bin",
-    url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-large-v3-turbo.bin?download=true",
-    sha256: "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69",
-    size_bytes: 1_624_555_275,
-    english_only: false,
-}, CatalogModel {
-    id: "whisper-large-v3",
-    name: "Whisper Large v3",
-    description: "Highest-accuracy multilingual local dictation; requires substantial memory and compute.",
-    language: "Multilingual",
-    file_name: "ggml-large-v3.bin",
-    url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-large-v3.bin?download=true",
-    sha256: "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2",
-    size_bytes: 3_095_033_483,
-    english_only: false,
-}, CatalogModel {
-    // Pinned to the catalog revision Handy uses. This is a Hugging Face model,
-    // not an unverified redirect: Flick still streams, hashes, and atomically
-    // promotes the exact GGUF file before it may be selected.
-    id: "parakeet-tdt-0.6b-v3-q8",
-    name: "Parakeet TDT 0.6B v3",
-    description: "Fast, accurate local dictation across 25 European languages. Translation to English is not supported by this model.",
-    language: "25 European languages",
-    file_name: "parakeet-tdt-0.6b-v3-Q8_0.gguf",
-    url: "https://huggingface.co/handy-computer/parakeet-tdt-0.6b-v3-gguf/resolve/85ac09ea12fc4b1112fa76810059364bc6adc9de/parakeet-tdt-0.6b-v3-Q8_0.gguf?download=true",
-    sha256: "5859f77944efcd8eafa23a6350731960b2b55b2203df51f319665c807d802cc7",
-    size_bytes: 739_508_576,
-    english_only: false,
-}, CatalogModel {
-    // Pinned catalog entries are imported from Handy's verified GGUF registry.
-    // Each remains independently streamed, hashed, and atomically promoted by
-    // Flick; the source catalog is metadata, never a trust bypass.
-    id: "canary-180m-flash-q8",
-    name: "Canary 180M Flash",
-    description: "Small, fast English, German, Spanish, and French dictation with verified English translation.",
-    language: "English, German, Spanish, French",
-    file_name: "canary-180m-flash-Q8_0.gguf",
-    url: "https://huggingface.co/handy-computer/canary-180m-flash-gguf/resolve/b147f9dc52b59f0998e410540a84727bd86457fd/canary-180m-flash-Q8_0.gguf?download=true",
-    sha256: "e13c7f5d0952b056a027cfffec13e3a3a134d1608babed24f983568f141e297c",
-    size_bytes: 218_447_552,
-    english_only: false,
-}, CatalogModel {
-    id: "qwen3-asr-0.6b-q8",
-    name: "Qwen3-ASR 0.6B",
-    description: "Accurate 30-language dictation with automatic language detection; transcription only.",
-    language: "30 languages",
-    file_name: "Qwen3-ASR-0.6B-Q8_0.gguf",
-    url: "https://huggingface.co/handy-computer/Qwen3-ASR-0.6B-gguf/resolve/e4e16599b900eb0cb36e524514756bb92eb092b7/Qwen3-ASR-0.6B-Q8_0.gguf?download=true",
-    sha256: "f081b2d5e23bd669d92cc331d722a8a0681943b8e6f34b48996fd5c319b5acd8",
-    size_bytes: 850_423_456,
-    english_only: false,
-}, CatalogModel {
-    id: "sensevoice-small-q8",
-    name: "SenseVoice Small",
-    description: "Fast Chinese, Cantonese, English, Japanese, and Korean dictation with automatic language detection.",
-    language: "Chinese, Cantonese, English, Japanese, Korean",
-    file_name: "SenseVoiceSmall-Q8_0.gguf",
-    url: "https://huggingface.co/handy-computer/SenseVoiceSmall-gguf/resolve/4a08b8e900b38a977e32eb08d5d0697d6e72ba04/SenseVoiceSmall-Q8_0.gguf?download=true",
-    sha256: "6c759ee4c9748c9b3f7a5a60ca74f0f7e685fb9d45d1378fce7cfd62f59adf29",
-    size_bytes: 252_684_608,
-    english_only: false,
-}, CatalogModel {
-    id: "moonshine-tiny-q8",
-    name: "Moonshine Tiny",
-    description: "Ultra-lightweight English dictation for quick, offline capture; transcription only.",
-    language: "English",
-    file_name: "moonshine-tiny-Q8_0.gguf",
-    url: "https://huggingface.co/handy-computer/moonshine-tiny-gguf/resolve/f5c11906eba3f44cf305eed30feb9cbfb0b4b9d0/moonshine-tiny-Q8_0.gguf?download=true",
-    sha256: "2fd348d7b38f97d309cc3ec6848f3f57f537b80244950f07d2637e463f95a3a1",
-    size_bytes: 35_466_912,
-    english_only: true,
-}];
+// Offline, pinned artifacts: generated from the attributed Handy/Hugging Face
+// catalog with stable IDs for existing Flick installations.
+const CATALOG: &[CatalogModel] = include!("model_catalog.rs");
 
 fn catalog_model(id: &str) -> Result<&'static CatalogModel> {
     CATALOG
@@ -340,53 +207,19 @@ pub fn model_supports_translation(id: &str) -> Result<bool> {
         return Ok(false);
     }
     let model = catalog_model(id)?;
-    Ok((model.id.starts_with("whisper-") && !model.english_only)
-        || model.id == "canary-180m-flash-q8")
+    Ok(model.supports_translation)
 }
 
-// Kept alongside the pinned artifacts rather than inferred from display labels
-// or file extensions. The language selector is not a promise that every
-// language or automatic detection mode is safe to send to every engine.
-const PARAKEET_V3_LANGUAGES: &[&str] = &[
-    "bg", "hr", "cs", "da", "nl", "en", "et", "fi", "fr", "de", "el", "hu", "it", "lv", "lt", "mt",
-    "pl", "pt", "ro", "sk", "sl", "es", "sv", "ru", "uk",
-];
-
-const CANARY_180M_LANGUAGES: &[&str] = &["en", "de", "es", "fr"];
-const QWEN3_ASR_LANGUAGES: &[&str] = &[
-    "zh", "en", "yue", "ar", "de", "fr", "es", "pt", "id", "it", "ko", "ru", "th", "vi", "ja",
-    "tr", "hi", "ms", "nl", "sv", "da", "fi", "pl", "cs", "fil", "fa", "el", "ro", "hu", "mk",
-];
-const SENSEVOICE_LANGUAGES: &[&str] = &["zh", "yue", "en", "ja", "ko"];
-
 fn catalog_supported_languages(model: &CatalogModel) -> &'static [&'static str] {
-    match model.id {
-        "parakeet-tdt-0.6b-v3-q8" => PARAKEET_V3_LANGUAGES,
-        "canary-180m-flash-q8" => CANARY_180M_LANGUAGES,
-        "qwen3-asr-0.6b-q8" => QWEN3_ASR_LANGUAGES,
-        "sensevoice-small-q8" => SENSEVOICE_LANGUAGES,
-        _ if model.english_only => &["en"],
-        _ => &[],
-    }
+    model.supported_languages
 }
 
 fn catalog_supports_language_detection(model: &CatalogModel) -> bool {
-    !model.english_only && model.id != "canary-180m-flash-q8"
+    model.supports_language_detection
 }
 
 fn catalog_engine(model: &CatalogModel) -> &'static str {
-    if model.file_name.ends_with(".gguf") {
-        match model.id {
-            "parakeet-tdt-0.6b-v3-q8" => "Parakeet / GGUF",
-            "canary-180m-flash-q8" => "Canary / GGUF",
-            "qwen3-asr-0.6b-q8" => "Qwen3 ASR / GGUF",
-            "sensevoice-small-q8" => "SenseVoice / GGUF",
-            "moonshine-tiny-q8" => "Moonshine / GGUF",
-            _ => "Compatible GGUF",
-        }
-    } else {
-        "Whisper / GGML"
-    }
+    model.engine
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -481,6 +314,11 @@ pub async fn list_local_models(app: AppHandle) -> Result<Vec<ModelInfo>, String>
             supports_language_detection: capabilities.supports_language_detection,
             supported_languages: capabilities.supported_languages,
             size_bytes: model.size_bytes,
+            group: model.group.to_string(),
+            quant: model.quant.to_string(),
+            recommended: model.recommended,
+            license: model.license.to_string(),
+            source_url: model.source_url.to_string(),
             available_locally,
             installed,
             active: installed && active_id == model.id,
@@ -514,6 +352,11 @@ pub async fn list_local_models(app: AppHandle) -> Result<Vec<ModelInfo>, String>
                     supports_language_detection: false,
                     supported_languages: Vec::new(),
                     size_bytes: entry.metadata().map(|metadata| metadata.len()).unwrap_or(0),
+                    group: name.to_string(),
+                    quant: "Custom".into(),
+                    recommended: true,
+                    license: "User supplied".into(),
+                    source_url: String::new(),
                     available_locally: true,
                     installed: true,
                     active: active_id == format!("custom:{name}"),
@@ -547,7 +390,11 @@ pub async fn set_active_local_model(app: AppHandle, id: String) -> Result<(), St
                 if local_model_capabilities(&id)?.supports_language_detection {
                     "auto".to_string()
                 } else {
-                    "en".to_string()
+                    local_model_capabilities(&id)?
+                        .supported_languages
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| "en".to_string())
                 };
         }
         config.dictation_model_id = id.clone();
@@ -871,7 +718,10 @@ async fn hash_file(path: &Path) -> Result<Sha256> {
         .await
         .context("Could not read installed model")?;
     let mut hasher = Sha256::new();
-    let mut buffer = [0u8; 64 * 1024];
+    // Async locals are embedded in every enclosing future. A stack array here
+    // multiplies across verify/download/IPC wrappers and can overflow the
+    // Windows thread stack before the first await (STATUS_STACK_OVERFLOW).
+    let mut buffer = vec![0u8; 64 * 1024];
     loop {
         let count = file
             .read(&mut buffer)
@@ -944,6 +794,17 @@ mod tests {
             assert!(model.url.starts_with("https://"));
             assert!(model.size_bytes > 1_000_000);
         }
+    }
+
+    #[test]
+    fn integrity_futures_fit_small_native_thread_stacks() {
+        let path = Path::new("unused-model.gguf");
+        assert!(std::mem::size_of_val(&hash_file(path)) < 4096);
+        assert!(std::mem::size_of_val(&verify_file(path, "unused")) < 8192);
+        fn future_size<F>(_: impl FnOnce(AppHandle, String) -> F) -> usize {
+            std::mem::size_of::<F>()
+        }
+        assert!(future_size(set_active_local_model) < 16 * 1024);
     }
 
     #[test]

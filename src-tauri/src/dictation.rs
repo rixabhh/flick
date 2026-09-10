@@ -323,19 +323,32 @@ pub async fn preview_input_level(app: AppHandle) -> Result<f32, String> {
     if is_recording(&app) {
         return Err("Stop dictation before testing the microphone.".into());
     }
-    start(&app).map_err(|error| error.to_string())?;
+    let start_app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || start(&start_app))
+        .await
+        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())?;
     tokio::time::sleep(std::time::Duration::from_millis(750)).await;
     let level = dictation_input_level(app.clone());
-    cancel(&app).map_err(|error| error.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || cancel(&app))
+        .await
+        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())?;
     Ok(level)
 }
 #[tauri::command]
-pub fn start_dictation(app: AppHandle) -> Result<(), String> {
-    start(&app).map_err(|e| e.to_string())
+pub async fn start_dictation(app: AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || start(&app))
+        .await
+        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())
 }
 #[tauri::command]
-pub fn cancel_dictation(app: AppHandle) -> Result<(), String> {
-    cancel(&app).map_err(|error| error.to_string())
+pub async fn cancel_dictation(app: AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || cancel(&app))
+        .await
+        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())
 }
 pub fn start(app: &AppHandle) -> Result<()> {
     let state = app
@@ -354,24 +367,48 @@ pub fn start(app: &AppHandle) -> Result<()> {
     // Capture one immutable settings snapshot for this recording. In
     // particular, changing Local to Cloud while recording must never upload
     // audio that was captured under the previous privacy choice.
-    let settings = crate::config::load_config(app)?;
+    // The persisted config is mirrored transactionally in AppState. Do not
+    // read/migrate settings from disk on every microphone shortcut.
+    let settings = app
+        .try_state::<crate::AppState>()
+        .context("Settings unavailable")?
+        .config
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Settings unavailable"))?
+        .clone();
+    if !settings.enabled {
+        bail!("Enable Flick before dictating");
+    }
     crate::dictation_provider::provider_info(&settings.dictation_provider)?;
+    let started = std::time::Instant::now();
+    show_overlay(app, "starting", &settings);
+    // Privacy queries run on the action worker, never inside the OS hook.
+    if crate::key_hook::active_app_is_protected(&settings.disabled_apps) {
+        hide_overlay(app);
+        bail!("Flick will not record in a protected app or password field.");
+    }
     remember_target(app);
     let abandoned = Arc::new(AtomicBool::new(false));
     let (sender, receiver) = mpsc::channel();
-    state
+    if state
         .sender
         .send(Command::Start {
             settings: settings.clone(),
             abandoned: Arc::clone(&abandoned),
             response: sender,
         })
-        .context("Audio thread unavailable")?;
+        .is_err()
+    {
+        hide_overlay(app);
+        bail!("Audio thread unavailable");
+    }
     if let Err(error) = await_audio_response(receiver) {
         abandoned.store(true, Ordering::SeqCst);
+        hide_overlay(app);
         return Err(error);
     }
     show_overlay(app, "recording", &settings);
+    log::info!("Microphone ready in {} ms", started.elapsed().as_millis());
     Ok(())
 }
 

@@ -73,23 +73,6 @@ pub struct TranscriptionRequest {
 /// `transcribe-cpp` auto-detects legacy Whisper GGML `.bin` files and modern
 /// GGUF architectures such as Parakeet. Existing downloads remain usable while
 /// Flick gains more local model families without changing privacy behavior.
-struct LocalModelTranscriber;
-
-impl LocalModelTranscriber {
-    fn transcribe(request: TranscriptionRequest) -> Result<String> {
-        let path = request
-            .local_model_path
-            .as_deref()
-            .context("Download a local speech model before dictating")?;
-        transcribe_local_whisper(
-            &request.audio,
-            &request.language,
-            request.translate_to_english,
-            path,
-        )
-    }
-}
-
 pub(crate) fn transcribe_local_whisper(
     audio: &[f32],
     language: &str,
@@ -270,9 +253,17 @@ pub async fn transcribe(
 ) -> Result<String> {
     match provider_id.as_str() {
         LOCAL_WHISPER_PROVIDER_ID => {
-            tokio::task::spawn_blocking(move || LocalModelTranscriber::transcribe(request))
-                .await
-                .context("Local transcription task failed")?
+            let path = request
+                .local_model_path
+                .as_ref()
+                .context("Choose and download a local speech model before dictating")?;
+            crate::transcription_worker::transcribe(
+                &request.audio,
+                path,
+                &request.language,
+                request.translate_to_english,
+            )
+            .await
         }
         CLOUD_OPENAI_COMPATIBLE_PROVIDER_ID => {
             transcribe_cloud_openai_compatible(request, cloud_base_url, cloud_model).await

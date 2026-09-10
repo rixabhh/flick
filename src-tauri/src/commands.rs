@@ -145,10 +145,10 @@ pub fn position_floating_pills(app: &AppHandle) -> anyhow::Result<()> {
             .ok_or_else(|| {
                 anyhow::anyhow!("Could not determine a display for Flick's floating pill")
             })?;
-        let monitor_position = monitor.position();
-        let monitor_size = monitor.size();
+        let monitor_position = &monitor.work_area().position;
+        let monitor_size = &monitor.work_area().size;
         let window_size = window.outer_size()?;
-        let margin = 24_i32;
+        let margin = (24.0 * monitor.scale_factor()).round() as i32;
         let left = monitor_position.x;
         let top = monitor_position.y;
         let right = left + monitor_size.width as i32;
@@ -164,7 +164,12 @@ pub fn position_floating_pills(app: &AppHandle) -> anyhow::Result<()> {
                 bottom - height - margin,
             ),
         };
-        window.set_position(Position::Physical(PhysicalPosition::new(x, y)))?;
+        window.set_position(Position::Physical(PhysicalPosition::new(
+            x.clamp(left, (right - width).max(left)),
+            y.clamp(top, (bottom - height).max(top)),
+        )))?;
+        window.set_focusable(false)?;
+        window.set_ignore_cursor_events(true)?;
     }
     Ok(())
 }

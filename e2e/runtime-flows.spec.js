@@ -15,6 +15,8 @@ test("composer prevents repeated keyboard requests and discards a previous sessi
   await page.evaluate(() => window.__flickTest.resolve("generate_reply", "Old private reply"));
   await expect(page.locator("#context")).toHaveValue("A different conversation");
   await expect(page.getByText("Old private reply")).toHaveCount(0);
+  await expect(page.locator("#intent")).toHaveValue("");
+  await page.locator("#intent").fill("New reply intent");
   await expect(page.locator(".generate")).toBeEnabled();
   expect((await calls(page, "update_config_fields")).length).toBe(0);
 });
@@ -97,6 +99,8 @@ test("recording pill uses the session provider, not a later settings change", as
   await emit(page, "flick://dictation-session", { state: "transcribing", provider_id: "local-whisper", app_language: "en" });
   await emit(page, "flick://dictation-state", "transcribing");
   await expect(page.locator(".overlay")).not.toContainText("cloud");
+  await expect(page.locator(".pill")).toHaveCSS("height", "40px");
+  await expect(page.locator(".pill")).toHaveCSS("width", "204px");
   await expect(page.locator(".spinner")).toHaveCSS("animation-name", "none");
 });
 
@@ -112,4 +116,62 @@ test("failed settings patches are visible and retained for an explicit retry", a
   await page.getByRole("button", { name: "Retry save" }).click();
   await expect(page.getByRole("alert")).toHaveCount(0);
   expect(await page.evaluate(() => window.__flickTest.config.floating_pill_position)).toBe("top-center");
+});
+
+test("reply shortcut recording rejects conflicts and saves a custom chord", async ({ page }) => {
+  await mockDesktop(page, "settings", { composer_shortcut: "Ctrl+Shift+Space", dictation_shortcut: "Ctrl+Space" });
+  await page.goto("/");
+  await page.getByRole("tab", { name: "Write", exact: true }).click();
+  const recorder = page.getByRole("button", { name: /Reply composer shortcut:/ });
+  await recorder.click();
+  await expect(recorder).toContainText("Press your shortcut");
+  await page.keyboard.press("Control+Space");
+  await expect(page.getByRole("alert")).toContainText("already used");
+  expect((await calls(page, "update_config_fields")).length).toBe(0);
+  await page.keyboard.press("Control+Alt+r");
+  await expect(recorder).toContainText("Ctrl+Alt+R");
+  expect((await calls(page, "update_config_fields"))[0].args.patch).toEqual({ composer_shortcut: "Ctrl+Alt+R" });
+  await expect.poll(async () => (await calls(page, "set_shortcut_capture")).at(-1)?.args.active).toBe(false);
+});
+
+test("compact reply companion focuses intent and keeps long drafts usable", async ({ page }) => {
+  await page.setViewportSize({ width: 364, height: 430 });
+  await mockDesktop(page, "composer");
+  await page.goto("/");
+  await expect(page.locator("#context")).toBeVisible();
+  await emit(page, "flick://composer-context", { context: "Could you send the revised proposal before Friday?" });
+  await expect(page.locator("#context")).not.toBeVisible();
+  await expect(page.locator("#intent")).toBeFocused();
+  await page.locator("#intent").fill("Say yes, I will send it Thursday.");
+  await page.locator(".generate").click();
+  await expect(page.locator("#draft")).toHaveValue("Thanks, that works for me.");
+  await expect(page.getByRole("button", { name: "Insert into app" })).toBeEnabled();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= 364)).toBe(true);
+  await page.screenshot({ path: "test-results/compact-composer.png" });
+});
+
+test("microphone startup is never presented as active recording", async ({ page }) => {
+  await mockDesktop(page, "dictation");
+  await page.goto("/");
+  await expect.poll(async () => (await calls(page, "plugin:event|listen")).length).toBe(2);
+  await emit(page, "flick://dictation-session", { state: "starting", provider_id: "local-whisper", app_language: "en" });
+  await expect(page.locator(".overlay strong")).toHaveText("Starting microphone…");
+  await expect(page.locator(".wave")).toHaveCount(0);
+  await emit(page, "flick://dictation-state", "recording");
+  await expect(page.locator(".overlay strong")).toHaveText("Recording");
+  await expect(page.locator(".pill")).toHaveCSS("width", "172px");
+});
+
+test("large model libraries filter variants and paginate without hiding installed models", async ({ page }) => {
+  await mockDesktop(page);
+  await page.goto("/");
+  await page.evaluate(() => window.__flickTest.models = Array.from({ length: 30 }, (_, index) => ({ id: `parakeet-${index}`, name: `Parakeet variant ${index}`, engine: "Parakeet / GGUF", language: "English", size_bytes: 140000000, recommended: index % 2 === 0, installed: index === 1, supported_languages: ["en"] })));
+  await page.getByRole("tab", { name: "Models", exact: true }).click();
+  await expect(page.locator("article")).toHaveCount(12);
+  await expect(page.getByText("Parakeet variant 1", { exact: true })).toBeVisible();
+  await page.getByLabel("All quantizations").check();
+  await page.getByRole("button", { name: /Show more models/ }).click();
+  await expect(page.locator("article")).toHaveCount(24);
+  await page.getByLabel("Search speech models").fill("variant 29");
+  await expect(page.locator("article")).toHaveCount(1);
 });

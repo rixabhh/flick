@@ -63,11 +63,18 @@ pub fn setup_tray(app: &AppHandle) -> Result<()> {
                 open_settings(app);
                 let _ = app.emit("flick://open-history", ());
             }
-            "copy-last" => match crate::history::copy_last_result(app) {
-                Ok(true) => {}
-                Ok(false) => log::info!("No history entry is available to copy"),
-                Err(error) => log::warn!("Could not copy last history entry: {error}"),
-            },
+            "copy-last" => {
+                let app = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    match crate::history::copy_last_result(&app).await {
+                        Ok(true) => {}
+                        Ok(false) => log::info!("No history entry is available to copy"),
+                        Err(error) => {
+                            log::warn!("Could not copy last history entry: {error}")
+                        }
+                    }
+                });
+            }
             "quit" => {
                 log::info!("Quit requested from tray");
                 app.exit(0);

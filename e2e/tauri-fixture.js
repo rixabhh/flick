@@ -46,6 +46,7 @@ export async function mockDesktop(page, label = "settings", overrides = {}) {
         if (command === "save_api_key") { mock.keys[args.provider] = args.key; return; }
         if (command === "list_local_models") return structuredClone(mock.models);
         if (command === "active_local_model_download") return mock.activeDownload;
+        if (command === "set_shortcut_capture") return;
         if (command === "generate_reply") return "Thanks, that works for me.";
         if (command === "capture_reply_context") return "Selected conversation";
         if (command === "plugin:autostart|is_enabled") return false;

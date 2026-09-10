@@ -253,7 +253,7 @@ pub fn event_to_char(event: &Event) -> Option<char> {
 pub fn start_hook_with_name_detection(app: AppHandle) -> mpsc::Receiver<HookEvent> {
     let (tx, rx) = mpsc::channel();
     let modifiers = Arc::new(Mutex::new(HashSet::new()));
-    let dictation_press = Arc::new(Mutex::new(None::<(Key, Instant)>));
+    let dictation_press = Arc::new(Mutex::new(None::<(Key, Instant, bool)>));
 
     thread::spawn(move || {
         log::info!("Global key hook thread started (with name detection)");
@@ -263,6 +263,10 @@ pub fn start_hook_with_name_detection(app: AppHandle) -> mpsc::Receiver<HookEven
         let callback = move |event: Event| {
             match event.event_type {
                 EventType::KeyPress(key) => {
+                    let is_repeat = callback_modifiers
+                        .lock()
+                        .map(|mut active| !active.insert(key))
+                        .unwrap_or(false);
                     if matches!(
                         key,
                         Key::ShiftLeft
@@ -271,10 +275,12 @@ pub fn start_hook_with_name_detection(app: AppHandle) -> mpsc::Receiver<HookEven
                             | Key::ControlRight
                             | Key::MetaLeft
                             | Key::MetaRight
+                            | Key::Alt
+                            | Key::AltGr
                     ) {
-                        if let Ok(mut active) = callback_modifiers.lock() {
-                            active.insert(key);
-                        }
+                        return;
+                    }
+                    if crate::shortcuts::capturing() {
                         return;
                     }
                     let config = app
@@ -282,30 +288,35 @@ pub fn start_hook_with_name_detection(app: AppHandle) -> mpsc::Receiver<HookEven
                         .and_then(|state| state.config.lock().ok().map(|config| config.clone()));
                     if let (Some(config), Ok(active)) = (config, callback_modifiers.lock()) {
                         if shortcut_matches(&config.composer_shortcut, key, &active) {
-                            if !active_app_is_disabled(&config.disabled_apps) {
+                            if !is_repeat {
                                 let _ = tx.send(HookEvent::OpenComposer);
                             }
                             return;
                         }
                         if shortcut_matches(&config.copy_last_result_shortcut, key, &active) {
-                            if !active_app_is_disabled(&config.disabled_apps) {
+                            if !is_repeat {
                                 let _ = tx.send(HookEvent::CopyLastResult);
                             }
                             return;
                         }
                         if shortcut_matches(&config.paste_plain_text_shortcut, key, &active) {
-                            if !active_app_is_disabled(&config.disabled_apps) {
+                            if !is_repeat {
                                 let _ = tx.send(HookEvent::PastePlainText);
                             }
                             return;
                         }
                         if shortcut_matches(&config.dictation_shortcut, key, &active) {
-                            if !active_app_is_disabled(&config.disabled_apps) {
+                            if !is_repeat {
                                 let event = match config.dictation_mode.as_str() {
-                                    "push-to-talk" => HookEvent::StartDictation,
+                                    "push-to-talk" => {
+                                        if let Ok(mut pressed) = callback_dictation_press.lock() {
+                                            *pressed = Some((key, Instant::now(), true));
+                                        }
+                                        HookEvent::StartDictation
+                                    }
                                     "hold-or-toggle" => {
                                         if let Ok(mut pressed) = callback_dictation_press.lock() {
-                                            *pressed = Some((key, Instant::now()));
+                                            *pressed = Some((key, Instant::now(), false));
                                         }
                                         HookEvent::HoldOrTogglePress
                                     }
@@ -315,6 +326,17 @@ pub fn start_hook_with_name_detection(app: AppHandle) -> mpsc::Receiver<HookEven
                             }
                             return;
                         }
+                    }
+                    // Command-modified keys are shortcuts or synthetic
+                    // clipboard input, never text typed into the focused
+                    // field. Clear the trigger tail so Flick's own Ctrl/Cmd
+                    // A/C/V sequence cannot manufacture a later transform.
+                    if callback_modifiers
+                        .lock()
+                        .is_ok_and(|active| command_modifier_active(&active))
+                    {
+                        let _ = tx.send(HookEvent::Clear);
+                        return;
                     }
                     // First, check for clear/backspace keys
                     match key {
@@ -356,36 +378,26 @@ pub fn start_hook_with_name_detection(app: AppHandle) -> mpsc::Receiver<HookEven
                     }
                 }
                 EventType::KeyRelease(key) => {
-                    let config = app
-                        .try_state::<crate::AppState>()
-                        .and_then(|state| state.config.lock().ok().map(|config| config.clone()));
-                    if let (Some(config), Ok(active)) = (config, callback_modifiers.lock()) {
-                        if config.dictation_mode == "push-to-talk"
-                            && shortcut_matches(&config.dictation_shortcut, key, &active)
-                        {
-                            let _ = tx.send(HookEvent::StopDictation);
-                        }
-                        if config.dictation_mode == "hold-or-toggle" {
-                            let was_held = callback_dictation_press
-                                .lock()
-                                .ok()
-                                .and_then(|mut pressed| {
-                                    if pressed
-                                        .as_ref()
-                                        .is_some_and(|(pressed_key, _)| *pressed_key == key)
-                                    {
-                                        pressed.take()
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .is_some_and(|(_, started)| {
-                                    started.elapsed() >= HOLD_OR_TOGGLE_THRESHOLD
-                                });
-                            if was_held {
-                                let _ = tx.send(HookEvent::StopDictation);
+                    // Bind release to the accepted press, not today's modifier
+                    // state: users often release Ctrl before the primary key.
+                    let should_stop = callback_dictation_press
+                        .lock()
+                        .ok()
+                        .and_then(|mut pressed| {
+                            if pressed
+                                .as_ref()
+                                .is_some_and(|(pressed_key, _, _)| *pressed_key == key)
+                            {
+                                pressed.take()
+                            } else {
+                                None
                             }
-                        }
+                        })
+                        .is_some_and(|(_, started, push_to_talk)| {
+                            push_to_talk || started.elapsed() >= HOLD_OR_TOGGLE_THRESHOLD
+                        });
+                    if should_stop {
+                        let _ = tx.send(HookEvent::StopDictation);
                     }
                     if let Ok(mut active) = callback_modifiers.lock() {
                         active.remove(&key);
@@ -407,6 +419,9 @@ pub fn start_hook_with_name_detection(app: AppHandle) -> mpsc::Receiver<HookEven
 }
 
 fn shortcut_matches(shortcut: &str, key: Key, active: &HashSet<Key>) -> bool {
+    let Ok(shortcut) = crate::shortcuts::normalize(shortcut) else {
+        return false;
+    };
     let tokens: Vec<String> = shortcut
         .split('+')
         .map(|token| token.trim().to_ascii_uppercase())
@@ -429,20 +444,31 @@ fn shortcut_matches(shortcut: &str, key: Key, active: &HashSet<Key>) -> bool {
     let wants_alt = tokens
         .iter()
         .any(|token| token == "ALT" || token == "OPTION");
-    if (wants_control && !has_control)
-        || (wants_meta && !has_meta)
-        || (wants_shift && !has_shift)
-        || (wants_alt && !has_alt)
+    if wants_control != has_control
+        || wants_meta != has_meta
+        || wants_shift != has_shift
+        || wants_alt != has_alt
     {
         return false;
     }
-    let key_token = format!("{key:?}").to_ascii_uppercase().replace("KEY", "");
+    let key_token = format!("{key:?}")
+        .to_ascii_uppercase()
+        .replace("KEY", "")
+        .replace("NUM", "");
     tokens.iter().any(|token| {
         !matches!(
             token.as_str(),
             "CTRL" | "CONTROL" | "CMD" | "COMMAND" | "META" | "SHIFT" | "ALT" | "OPTION"
         ) && (token == &key_token || (token == "SPACE" && key == Key::Space))
     })
+}
+
+fn command_modifier_active(active: &HashSet<Key>) -> bool {
+    active.contains(&Key::ControlLeft)
+        || active.contains(&Key::ControlRight)
+        || active.contains(&Key::MetaLeft)
+        || active.contains(&Key::MetaRight)
+        || active.contains(&Key::Alt)
 }
 
 #[cfg(test)]
@@ -457,10 +483,26 @@ mod tests {
         assert!(shortcut_matches("Ctrl+Shift+Space", Key::Space, &modifiers));
         assert!(!shortcut_matches("Ctrl+Alt+Space", Key::Space, &modifiers));
         assert!(shortcut_matches("Ctrl+Shift+R", Key::KeyR, &modifiers));
+        assert!(!shortcut_matches("Ctrl+Space", Key::Space, &modifiers));
+        assert!(shortcut_matches("Ctrl+Shift+2", Key::Num2, &modifiers));
         modifiers.remove(&Key::ShiftLeft);
         modifiers.insert(Key::Alt);
         assert!(shortcut_matches("Ctrl+Alt+C", Key::KeyC, &modifiers));
         assert!(shortcut_matches("Ctrl+Alt+V", Key::KeyV, &modifiers));
+    }
+
+    #[test]
+    fn injected_clipboard_chords_are_not_treated_as_typed_text() {
+        for modifier in [
+            Key::ControlLeft,
+            Key::ControlRight,
+            Key::MetaLeft,
+            Key::MetaRight,
+            Key::Alt,
+        ] {
+            assert!(command_modifier_active(&HashSet::from([modifier])));
+        }
+        assert!(!command_modifier_active(&HashSet::from([Key::ShiftLeft])));
     }
 
     #[test]

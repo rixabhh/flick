@@ -108,7 +108,7 @@ pub fn latest_text(app: &AppHandle) -> Result<Option<String>> {
 
 /// Copy the latest optional local-history result without reading or changing
 /// the active application. This is shared by the tray, CLI, and global key.
-pub fn copy_last_result(app: &AppHandle) -> Result<bool> {
+pub async fn copy_last_result(app: &AppHandle) -> Result<bool> {
     let recent = app
         .try_state::<RecentResultState>()
         .and_then(|state| state.latest.lock().ok().and_then(|latest| latest.clone()));
@@ -119,12 +119,12 @@ pub fn copy_last_result(app: &AppHandle) -> Result<bool> {
     let Some(text) = text else {
         return Ok(false);
     };
-    crate::replacer::copy_text_to_clipboard(&text)?;
+    crate::replacer::copy_text_to_clipboard(&text).await?;
     Ok(true)
 }
 
 #[tauri::command]
-pub fn copy_history_entry(app: AppHandle, id: i64) -> Result<(), String> {
+pub async fn copy_history_entry(app: AppHandle, id: i64) -> Result<(), String> {
     let connection = connection(&app).map_err(|error| error.to_string())?;
     let text: String = connection
         .query_row(
@@ -135,7 +135,9 @@ pub fn copy_history_entry(app: AppHandle, id: i64) -> Result<(), String> {
         .optional()
         .map_err(|error| error.to_string())?
         .ok_or_else(|| "History entry no longer exists.".to_string())?;
+    drop(connection);
     crate::replacer::copy_text_to_clipboard(&text)
+        .await
         .map_err(|error| format!("Could not write the clipboard: {error}"))
 }
 

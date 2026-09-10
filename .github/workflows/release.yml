@@ -56,6 +56,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - run: node scripts/generate-model-catalog.mjs --check
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
@@ -109,10 +110,18 @@ jobs:
           if ($install.ExitCode -notin @(0, 3010)) { throw "LLVM installer failed: $($install.ExitCode)" }
           if (-not (Test-Path -LiteralPath 'C:\Program Files\LLVM\bin\libclang.dll')) { throw 'LLVM installation did not supply libclang.dll' }
           "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          # whisper.cpp requires clang rather than MSVC for Windows ARM64.
+          # ggml rejects MSVC for ARM. Pin the complete clang-cl target and a
+          # portable CPU baseline; leaving GGML_NATIVE enabled can bake the
+          # hosted runner's ARM extensions into the shipped executable.
           "CC=clang-cl" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "CXX=clang-cl" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "CXXFLAGS=/EHsc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "CMAKE_C_COMPILER=clang-cl" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "CMAKE_CXX_COMPILER=clang-cl" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "CMAKE_C_COMPILER_TARGET=aarch64-pc-windows-msvc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "CMAKE_CXX_COMPILER_TARGET=aarch64-pc-windows-msvc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "CL=/EHsc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "RC=llvm-rc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "TRANSCRIBE_CMAKE_ARGS=-DGGML_NATIVE=OFF -DGGML_OPENMP=OFF" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "CMAKE_GENERATOR=Ninja" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Install LLVM bindings on macOS
@@ -175,12 +184,18 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: node scripts/build-release.mjs
 
+      - name: Test real Whisper, Moonshine and Parakeet transcription
+        timeout-minutes: 20
+        env:
+          FLICK_BUILD_TARGET: ${{ matrix.target }}
+        run: node scripts/smoke-transcription.mjs
+
       - name: Collect installers and SHA-256 checksums
         env:
           FLICK_BUILD_TARGET: ${{ matrix.target }}
         run: node scripts/collect-release-artifacts.mjs
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: installers-${{ matrix.target }}
           path: release-artifacts/
@@ -197,7 +212,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ needs.validate.outputs.sha }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: installers-*
           path: release-artifacts

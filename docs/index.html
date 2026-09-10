@@ -3,31 +3,33 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Flick is a local-first desktop writing tool for transforming text, deliberate replies, and dictation you control." />
-    <meta property="og:title" content="Flick — A better way to get words out." />
-    <meta property="og:description" content="A local-first desktop writing tool for text, replies, and dictation." />
+    <meta name="description" content="Dictate, rewrite, and reply in any desktop app with Flick. Use private local speech models or connect your own cloud provider." />
+    <meta property="og:title" content="Flick — Speak, rewrite, and reply anywhere." />
+    <meta property="og:description" content="A simple desktop assistant for dictation, better writing, and faster replies." />
     <meta property="og:type" content="website" />
     <meta name="theme-color" content="#f4f1eb" />
-    <title>Flick — A better way to get words out.</title>
+    <title>Flick — Speak, rewrite, and reply anywhere.</title>
     <link rel="icon" type="image/png" href="./assets/flick-logo.png" />
     <link rel="stylesheet" href="./styles.css" />
+    <noscript><style>@media(max-width:720px){.menu-toggle{display:none!important}.site-header{margin-bottom:214px}.site-header nav{display:flex!important;top:64px}.nav-cta{margin-left:auto}}</style></noscript>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
     <div class="grain" aria-hidden="true"></div>
     <header class="site-header" data-header>
       <a class="brand" href="#top" aria-label="Flick home"><img src="./assets/flick-logo.png" alt="" /><span>Flick</span></a>
-      <nav aria-label="Primary navigation"><a href="#flow">How it works</a><a href="#dictation">Dictation</a><a href="#privacy">Privacy</a></nav>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav" data-menu-toggle>Menu</button>
+      <nav id="primary-nav" aria-label="Primary navigation" data-nav><a href="#start">Get started</a><a href="#flow">Features</a><a href="#dictation">Models</a><a href="#privacy">Privacy</a><a href="https://github.com/rixabhh/flick">GitHub</a></nav>
       <a class="nav-cta" href="https://github.com/rixabhh/flick/releases">Downloads <span aria-hidden="true">↓</span></a>
     </header>
 
     <main id="main">
       <section id="top" class="hero section-wrap">
         <div class="hero-copy reveal">
-          <p class="kicker"><span class="kicker-dot"></span> LOCAL-FIRST DESKTOP WRITING</p>
-          <h1>Get the words<br />out of your <i>way.</i></h1>
-          <p class="lede">Flick is a calm little layer for the moments when you know what you mean, but need help saying it. Rewrite in place, compose a considered reply, or speak instead of type.</p>
-          <div class="hero-actions"><a class="button button-dark" href="https://github.com/rixabhh/flick/releases">View available downloads <span aria-hidden="true">↓</span></a><a class="text-button" href="#flow">See the flow <span aria-hidden="true">↘</span></a></div>
+          <p class="kicker"><span class="kicker-dot"></span> YOUR DESKTOP WRITING ASSISTANT</p>
+          <h1>Speak it.<br />Send it. <i>Done.</i></h1>
+          <p class="lede">Dictate, improve text, and draft replies in the apps you already use. Flick appears when you need it and disappears when you are done.</p>
+          <div class="hero-actions"><a class="button button-dark" href="https://github.com/rixabhh/flick/releases">Download Flick <span aria-hidden="true">↓</span></a><a class="text-button" href="#start">How to use it <span aria-hidden="true">↘</span></a></div>
           <p class="availability">macOS · Windows · Linux <span></span> Open source</p>
         </div>
         <div class="hero-art reveal" aria-label="A preview of Flick transforming text">
@@ -47,19 +49,30 @@
       </section>
 
       <section class="principles section-wrap reveal" aria-label="Flick principles">
-        <p>Built to help—without taking over.</p>
-        <div><span>01</span><strong>It lives in the apps you already use.</strong></div>
-        <div><span>02</span><strong>Cloud processing only when you choose it.</strong></div>
-        <div><span>03</span><strong>It always leaves you the final say.</strong></div>
+        <p>Simple by design.</p>
+        <div><span>01</span><strong>Works wherever you already type.</strong></div>
+        <div><span>02</span><strong>Your choice of local or cloud speech.</strong></div>
+        <div><span>03</span><strong>You review before anything is inserted.</strong></div>
+      </section>
+
+      <section id="start" class="getting-started section-wrap">
+        <div class="start-heading reveal"><p class="kicker">START IN FIVE MINUTES</p><h2>From install to<br />your first dictation.</h2><p>No new editor to learn. Set Flick up once, then use a shortcut from any supported text field.</p></div>
+        <ol class="start-grid">
+          <li class="reveal"><span>1</span><div><h3>Install Flick</h3><p>Download the build for your computer: x64 or ARM64 on Windows, Apple Silicon or Intel on macOS, or x64 on Linux.</p><a href="https://github.com/rixabhh/flick/releases">Open downloads →</a></div></li>
+          <li class="reveal"><span>2</span><div><h3>Choose a speech model</h3><p>Open <b>Models</b>, pick a small local model, and select <b>Download</b>. Prefer cloud? Add your own transcription key under <b>Dictate</b>.</p><a href="#dictation">Compare the choices →</a></div></li>
+          <li class="reveal"><span>3</span><div><h3>Pick your shortcuts</h3><p>Record your own dictation and reply shortcuts in Settings. Flick warns you if two actions use the same keys.</p><a href="https://github.com/rixabhh/flick#shortcuts">See the defaults →</a></div></li>
+          <li class="reveal"><span>4</span><div><h3>Start writing</h3><p>Press the dictation shortcut and speak. Or select a message and open the compact reply assistant. Press <b>Esc</b> to cancel dictation.</p><a href="#flow">Learn all three workflows →</a></div></li>
+        </ol>
+        <div class="quick-guide reveal"><div><small>YOUR FIRST TRY</small><strong>Press the dictation shortcut → wait for “Recording” → speak → press it again.</strong></div><p>The pill appears where you place it in Settings. Your result returns to the text field you started from.</p></div>
       </section>
 
       <section id="flow" class="story section-wrap">
-        <div class="story-intro reveal"><p class="kicker">THREE SMALL MOMENTS</p><h2>Helpful at exactly<br />the right time.</h2><p>Flick is designed to be quiet until you call it. A shortcut or a small command opens one focused interaction, then gets out of the way.</p></div>
+        <div class="story-intro reveal"><p class="kicker">WHAT YOU CAN DO</p><h2>Three tools.<br />One simple flow.</h2><p>Use only the feature you need. Flick completes the task in place, so you can keep working without moving text between apps.</p></div>
         <div class="story-layout">
           <div class="story-steps" aria-label="Flick workflows">
-            <article class="step is-active" data-step="0"><p class="step-index">01 / WRITE</p><h3>Turn a rough thought into a clear one.</h3><p>Type naturally. Add a command. Flick returns a polished version to the same text field—only when you ask.</p><a href="https://github.com/rixabhh/flick#write-with-commands">Explore text commands <span>→</span></a></article>
-            <article class="step" data-step="1"><p class="step-index">02 / REPLY</p><h3>Give a reply the context it deserves.</h3><p>Select what matters, choose a tone, then edit the draft before you copy or deliberately insert it.</p><a href="https://github.com/rixabhh/flick#reply-composer">Explore reply drafting <span>→</span></a></article>
-            <article class="step" data-step="2"><p class="step-index">03 / DICTATE</p><h3>Say the thought while it is still there.</h3><p>Record with a model you choose. Keep audio local, or explicitly connect a cloud transcription provider with your own key.</p><a href="#dictation">Explore dictation <span>→</span></a></article>
+            <article class="step is-active" data-step="0"><p class="step-index">01 / IMPROVE TEXT</p><h3>Make rough writing clear.</h3><p>Type a command such as <b>!fix</b> after your text. Flick improves it in the same field.</p><a href="https://github.com/rixabhh/flick#improve-text">See every command <span>→</span></a></article>
+            <article class="step" data-step="1"><p class="step-index">02 / DRAFT A REPLY</p><h3>Reply without opening another app.</h3><p>Select the message, press your reply shortcut, choose a tone, and edit the draft before inserting it.</p><a href="https://github.com/rixabhh/flick#draft-a-reply">See the reply tutorial <span>→</span></a></article>
+            <article class="step" data-step="2"><p class="step-index">03 / DICTATE</p><h3>Speak instead of typing.</h3><p>Press your shortcut, wait for <b>Recording</b>, then speak. Use a private local model or a cloud provider you connect yourself.</p><a href="#dictation">See speech options <span>→</span></a></article>
           </div>
           <div class="story-stage" aria-live="polite">
             <div class="stage-window stage-write is-active" data-stage="0"><div class="stage-top"><span>◼</span><b>Anywhere you can type</b><i>×</i></div><div class="stage-message">could you send the final notes by tonight <code>!formal</code></div><div class="stage-progress"><span></span> Refining your text</div><div class="stage-message refined">Could you please send the final notes by the end of today?</div><p>One trigger. One clean result.</p></div>
@@ -70,16 +83,16 @@
       </section>
 
       <section id="dictation" class="dictation-section"><div class="section-wrap dictation-inner">
-        <div class="dictation-copy reveal"><p class="kicker">DICTATION, ON YOUR TERMS</p><h2>Your voice.<br />Your choice of engine.</h2><p>Start with a verified local model and keep your audio on your computer. When a cloud model is the right tool, connect an OpenAI-compatible provider deliberately—never by surprise.</p><a class="inline-link" href="https://github.com/rixabhh/flick#dictation-local-models-and-optional-cloud-transcription">Read how dictation works <span>→</span></a></div>
-        <div class="model-browser reveal"><div class="model-browser-top"><span>Speech models</span><i>⌘ K</i></div><div class="model-entry selected"><span class="model-mark whisper">W</span><div><b>Whisper</b><small>Local · English & multilingual</small></div><em>Ready</em></div><div class="model-entry"><span class="model-mark parakeet">P</span><div><b>Verified GGUF</b><small>Parakeet · Canary · Qwen3 ASR · SenseVoice · Moonshine</small></div><em>Choose</em></div><div class="model-entry"><span class="model-mark cloud">☁</span><div><b>Your cloud provider</b><small>OpenAI-compatible · opt-in</small></div><em>Connect</em></div><div class="model-browser-footer"><span><i></i> Downloads are verified</span><b>See all models →</b></div></div>
+        <div class="dictation-copy reveal"><p class="kicker">CHOOSE HOW SPEECH IS PROCESSED</p><h2>Local when you want.<br />Cloud when you choose.</h2><p>For privacy, download a local model and keep audio on your computer. For another provider, add your own OpenAI-compatible transcription key. Flick never switches between them silently.</p><a class="inline-link" href="https://github.com/rixabhh/flick#dictate">Follow the dictation tutorial <span>→</span></a></div>
+        <div class="model-browser reveal"><div class="model-browser-top"><span>Speech models</span><i>Search</i></div><div class="model-entry selected"><span class="model-mark whisper">W</span><div><b>Whisper</b><small>Easy local starting point</small></div><em>Local</em></div><div class="model-entry"><span class="model-mark parakeet">P</span><div><b>More local families</b><small>Parakeet · Moonshine · Canary · Qwen and more</small></div><em>Browse</em></div><div class="model-entry"><span class="model-mark cloud">☁</span><div><b>Your cloud provider</b><small>OpenAI-compatible · your own key</small></div><em>Optional</em></div><div class="model-browser-footer"><span><i></i> 370 pinned downloads</span><b>Sizes shown before download</b></div></div>
       </div></section>
 
       <section id="privacy" class="privacy section-wrap">
-        <div class="privacy-title reveal"><p class="kicker">TRUST IS PART OF THE INTERFACE</p><h2>Useful without<br />watching over you.</h2></div>
-        <div class="privacy-list"><article class="reveal"><span>01</span><div><h3>Selection, not surveillance</h3><p>Reply context begins with the text you select. Flick does not scrape your screen, chats, or accessibility tree.</p></div></article><article class="reveal"><span>02</span><div><h3>Safe where it counts</h3><p>Flick checks the original target before paste-back. If it changed or is protected, the result stays available to copy.</p></div></article><article class="reveal"><span>03</span><div><h3>Keys stay in your keychain</h3><p>Provider credentials are stored by your operating system—not in a settings file. Diagnostics are explicit and redacted.</p></div></article></div>
+        <div class="privacy-title reveal"><p class="kicker">CLEAR PRIVACY CONTROLS</p><h2>Your words stay<br />under your control.</h2></div>
+        <div class="privacy-list"><article class="reveal"><span>01</span><div><h3>You choose the context</h3><p>Flick uses only the text you select for a reply. It does not read your screen or collect whole conversations.</p></div></article><article class="reveal"><span>02</span><div><h3>Flick checks before inserting</h3><p>If you switch apps or start typing somewhere else, Flick keeps the result available to copy instead of pasting into the wrong place.</p></div></article><article class="reveal"><span>03</span><div><h3>Your keys use the system keychain</h3><p>API keys are stored by your operating system. Cloud dictation happens only after you turn it on and choose a provider.</p></div></article></div>
       </section>
 
-      <section class="closing section-wrap reveal"><div class="closing-orbit" aria-hidden="true"></div><img src="./assets/flick-logo.png" alt="" /><p class="kicker">FLICK 2.0 BETA</p><h2>Make every text field<br />feel more like yours.</h2><p>Download the beta, choose your own provider and speech model, and stay in your flow.</p><div class="hero-actions"><a class="button button-light" href="https://github.com/rixabhh/flick/releases/latest">Download Flick <span aria-hidden="true">↓</span></a><a class="text-button light" href="https://github.com/rixabhh/flick#readme">Read the guide <span aria-hidden="true">→</span></a></div><small>Windows x64 &amp; ARM64 · macOS Apple Silicon &amp; Intel · Linux x64</small></section>
+      <section class="closing section-wrap reveal"><div class="closing-orbit" aria-hidden="true"></div><img src="./assets/flick-logo.png" alt="" /><p class="kicker">FLICK 2.0.1 CANDIDATE</p><h2>Ready when you are.<br />Gone when you’re done.</h2><p>Choose your shortcuts and speech model once. Then dictate, rewrite, and reply wherever you work.</p><div class="hero-actions"><a class="button button-light" href="https://github.com/rixabhh/flick/releases">Download Flick <span aria-hidden="true">↓</span></a><a class="text-button light" href="https://github.com/rixabhh/flick#quick-start">Read the setup guide <span aria-hidden="true">→</span></a></div><small>Windows x64 &amp; ARM64 · macOS Apple Silicon &amp; Intel · Linux x64</small></section>
     </main>
     <footer class="site-footer section-wrap"><a class="brand" href="#top"><img src="./assets/flick-logo.png" alt="" /><span>Flick</span></a><span>Local-first writing assistance.</span><a href="https://github.com/rixabhh/flick">GitHub <b>↗</b></a></footer>
     <script src="./script.js"></script>

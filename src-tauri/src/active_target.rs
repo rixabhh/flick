@@ -38,34 +38,21 @@ pub fn get() -> Option<ActiveTarget> {
 
 #[cfg(target_os = "macos")]
 pub fn get() -> Option<ActiveTarget> {
-    use std::process::Command;
-
-    // NSWorkspace gives us the frontmost bundle without requesting screen
-    // capture or inspecting any UI content. A tab separator keeps the
-    // localized name and bundle path unambiguous for normal macOS paths.
-    let script = r#"
-        ObjC.import('AppKit');
-        const app = $.NSWorkspace.sharedWorkspace.frontmostApplication;
-        [app.localizedName.js, app.bundleURL.path.js, app.processIdentifier].join('\t');
-    "#;
-    let output = Command::new("osascript")
-        .args(["-l", "JavaScript", "-e", script])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let value = String::from_utf8(output.stdout).ok()?;
-    let mut fields = value.trim().split('\t');
-    let app_name = fields.next()?;
-    let process_path = fields.next()?;
-    let process_id = fields.next()?.parse().ok()?;
-    (!app_name.trim().is_empty()).then(|| ActiveTarget {
-        app_name: app_name.trim().to_ascii_lowercase(),
-        title: String::new(),
-        process_path: process_path.trim().to_ascii_lowercase(),
-        process_id,
-        window_id: String::new(),
+    // Query the native API directly. Starting an AppleScript process for each
+    // protection/target check added avoidable latency before every recording.
+    // No screen capture, field contents or Apple Events permission is needed.
+    objc2::rc::autoreleasepool(|_| {
+        let app = objc2_app_kit::NSWorkspace::sharedWorkspace().frontmostApplication()?;
+        let app_name = app.localizedName()?.to_string().to_ascii_lowercase();
+        let process_path = app.bundleURL()?.path()?.to_string().to_ascii_lowercase();
+        let process_id = u64::try_from(app.processIdentifier()).ok()?;
+        (!app_name.is_empty()).then(|| ActiveTarget {
+            app_name,
+            title: String::new(),
+            process_path,
+            process_id,
+            window_id: String::new(),
+        })
     })
 }
 

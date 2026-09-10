@@ -208,6 +208,23 @@ desktop signed-beta acceptance—not as a release blocker for Flick desktop.
 
 ## Definition of done
 
+### Final consolidated candidate (2.0.1)
+
+The final batch addresses the installed Windows stack-overflow report, global
+shortcut repeat/modifier handling, microphone startup feedback, native macOS
+target-query latency, compact pointer-positioned replies, custom shortcut
+recording, and an expanded 370-artifact model catalog. Every upstream pinned
+hash and size was checked against Hugging Face. Native engine execution now
+uses a subprocess with audio pipes and a five-minute deadline.
+
+Local browser regressions cover custom binding conflicts, compact draft
+insertion, explicit starting/listening states and large-catalog filtering.
+Release adds real Whisper/Moonshine/Parakeet inference and invalid-model checks
+to the five packaging targets. A green mock browser test is not native-device
+acceptance, and metadata integrity is not model-quality validation. Signing,
+full catalog/hardware acceptance and native cross-app insertion remain required
+before removing beta language from the product front.
+
 Flick is a market-ready desktop product when the current full CI matrix is
 green, signed installers are accepted on real target hardware, all release
 checklist scenarios have evidence, the website/README accurately describe that

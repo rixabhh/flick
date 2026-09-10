@@ -1,120 +1,147 @@
 <div align="center">
-  <img src="src-tauri/icons/128x128@2x.png" alt="Flick logo" width="128" height="128" />
+  <img src="src-tauri/icons/128x128@2x.png" alt="Flick logo" width="112" height="112" />
   <h1>Flick</h1>
-  <p><strong>Write, dictate, and reply from anywhere—on your terms.</strong></p>
+  <p><strong>Speak, rewrite, and reply anywhere.</strong></p>
+  <p>A small desktop assistant that works in the apps you already use.</p>
   <p>
-    <a href="https://rixabhh.github.io/flick/"><img src="https://img.shields.io/badge/Website-Live-f5f5f5?style=flat-square" alt="Website"></a>
-    <a href="https://v2.tauri.app/"><img src="https://img.shields.io/badge/Tauri-v2-24C8DB?style=flat-square&logo=tauri" alt="Tauri v2"></a>
-    <a href="https://svelte.dev/"><img src="https://img.shields.io/badge/Svelte-UI-FF3E00?style=flat-square&logo=svelte" alt="Svelte"></a>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="MIT License"></a>
+    <a href="https://rixabhh.github.io/flick/">Website</a> ·
+    <a href="https://github.com/rixabhh/flick/releases">Downloads</a> ·
+    <a href="#quick-start">Setup guide</a> ·
+    <a href="#privacy">Privacy</a>
   </p>
 </div>
 
-Flick is a local-first desktop writing assistant for Windows, macOS, and Linux. Transform text in place, dictate with a local model or an explicitly configured cloud provider, and draft thoughtful replies from an intentional text selection. Bring your own AI provider and decide where transcription runs.
+Flick helps you dictate, improve text, and draft replies without moving your work into another editor. Choose private local speech models, or connect your own cloud transcription provider when you want one.
 
-> **Beta status:** Stable promotion requires signed/notarized per-platform builds and native acceptance evidence. macOS candidates require macOS 11 or later. See [MARKET_READY_PLAN.md](MARKET_READY_PLAN.md) and [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
+> Flick 2.0.1 is a release candidate. The code and unsigned build candidates are available now; public release still requires signed and notarized installers plus final testing on physical devices. See the [release checklist](RELEASE_CHECKLIST.md).
 
-## What Flick does
+## What can I do with Flick?
 
-- **Write anywhere:** Type `!fix`, `!formal`, `!translate:spanish`, or a custom command in a text field. Flick replaces the current text using your configured provider.
-- **Draft replies deliberately:** Select only the context you want, choose a tone, provide a rough instruction, then edit, copy, or explicitly insert the result.
-- **Dictate your way:** Record through a chosen microphone with adaptive voice-activity detection, then use local Whisper, Parakeet, Canary, Qwen3 ASR, SenseVoice, or Moonshine models—or explicitly opt into an OpenAI-compatible cloud transcription endpoint.
-- **Keep control:** Configure shortcuts, exclusions, plain-text paste, command templates, optional history, diagnostics export, and English/Spanish UI.
+| I want to… | What to do |
+| --- | --- |
+| Speak instead of type | Press your dictation shortcut, wait for **Recording**, speak, then press it again. |
+| Improve a sentence | Add a command such as `!fix` or `!shorter` after the text. |
+| Draft a reply | Select a message, press your reply shortcut, choose a tone, and review the draft. |
+
+Flick stays out of the way until you use a shortcut or command. The dictation and transformation pill can sit at the top or bottom of your display, and the reply assistant opens as a compact companion near your cursor.
 
 ## Quick start
 
-1. Open **Settings → Write**, select Gemini, OpenRouter, or an OpenAI-compatible endpoint, then save your own key. Local compatible endpoints may omit a key.
-2. Open **Models** and download a verified local speech model. Flick shows the engine, disk size, languages, auto-detection, and translation capability before you choose. If you prefer cloud dictation, select the cloud provider under **Dictate**, set its endpoint/model, and save its separate API key.
-3. Open **Dictate** and choose a microphone plus Toggle, Push-to-talk, or Hold-or-toggle activation.
-4. Use Flick in a supported text field:
-   - Type text followed by a `!command`.
-   - Select conversation text and open the reply composer.
-   - Press the dictation shortcut to record locally.
+### 1. Install the right build
 
-The default reply shortcut is `Ctrl+Shift+Space` and dictation shortcut is `Ctrl+Space` on Windows/Linux; macOS uses `Cmd` in place of `Ctrl`.
+Open [Downloads](https://github.com/rixabhh/flick/releases) and match the file to your computer:
 
-### Install the right build
+- **Windows:** choose `x64` for most Intel/AMD PCs or `arm64` for Snapdragon/Windows on ARM devices.
+- **macOS:** choose Apple Silicon for M-series Macs or Intel for older Macs.
+- **Linux:** choose the x64 package for your distribution.
 
-On the release page, choose the file that matches both your operating system and processor. Windows names are intentional: use **`x64`** for the vast majority of Intel/AMD PCs and **`arm64`** only for Windows on ARM devices such as Snapdragon PCs. An `x64` MSI cannot install on Windows ARM; download the matching `arm64` MSI (or `arm64-setup.exe`) instead. macOS builds are published separately for **Apple Silicon** and **Intel**.
+Approve microphone and accessibility/input permissions when your operating system asks.
 
-## Your first day with Flick
+### 2. Choose how dictation runs
 
-Flick is designed to stay invisible until you call it. You do not need to learn a new editor or move your work into a separate window.
+Open **Settings → Models** and download a small local model. **Whisper Tiny English** is a good first test. Flick shows the language support and download size before you choose it.
 
-| If you want to… | Do this | What happens next |
-| --- | --- | --- |
-| Improve a sentence | Add `!fix` at the end of the sentence | Flick replaces that text in the app you are already using. |
-| Send a considered reply | Select the relevant message, press the reply shortcut, choose a tone, and state your intent | Review the editable draft, then Copy or explicitly Insert it. |
-| Write without typing | Press the dictation shortcut, speak, then press it again (or release it in push-to-talk mode) | Flick transcribes locally and safely pastes the result only if the original field is still active. |
+If you prefer cloud transcription, open **Settings → Dictate**, choose the cloud option, and enter your own OpenAI-compatible endpoint, model, and API key. Flick never falls back from local to cloud by itself.
 
-Start with `!fix`, **Casual** replies, and the **Tiny English** model. They are the quickest way to learn the flow. Move to a larger or multilingual model only when you need more accuracy or languages; the Models page displays each download’s disk size before you choose it.
+### 3. Set your shortcuts
 
-### If something does not work
+Open **Settings → Write** to record a reply shortcut and **Settings → Dictate** to record a dictation shortcut. You can also customize Copy Last Result and Paste as Plain Text under **Advanced**. Flick rejects shortcuts that conflict with another Flick action.
 
-- **No dictation:** Download a model, then select the correct microphone in **Dictate**. Approve the OS microphone permission when it appears.
-- **Nothing is pasted:** Flick deliberately refuses to paste into protected fields or after the target app changes. The result remains available to copy.
-- **Shortcut is ignored:** Change it under **Advanced**, or on restricted Wayland desktops bind a desktop shortcut to the documented Flick CLI action.
-- **Model download stopped:** Use Download again. Flick resumes only when the model server confirms the byte range, and validates the complete file before it appears as installed.
-- **AI generation is unavailable:** Check the provider/key in **Write**. Local OpenAI-compatible servers can be configured without a key.
+### 4. Try your first dictation
 
-## Write with commands
+1. Click a normal text field in any supported app.
+2. Press the dictation shortcut.
+3. Wait until the pill says **Recording**, then speak.
+4. Press the shortcut again, or release it in push-to-talk mode.
+5. Flick transcribes and returns the text to the field you started from.
+
+Press `Esc` while recording to discard the audio. Change the pill position under **Settings → Dictate → Floating pill position**.
+
+## Improve text
+
+Write normally, then add a command at the end:
 
 | Command | Result |
 | --- | --- |
-| `!fix` | Correct grammar, spelling, and punctuation. |
-| `!formal` / `!casual` | Adjust professional or friendly tone. |
-| `!shorter` / `!longer` | Condense or expand text. |
+| `!fix` | Fix spelling, grammar, and punctuation. |
+| `!formal` | Use a more professional tone. |
+| `!casual` | Make the writing friendlier. |
+| `!shorter` | Make the text more concise. |
+| `!longer` | Add useful detail. |
 | `!rephrase` | Say the same thing more clearly. |
-| `!bullet` / `!explain` | Structure notes or simplify dense text. |
-| `!translate:<language>` | Translate to the named language. |
+| `!bullet` | Turn the text into a list. |
+| `!translate:spanish` | Translate to the language you name. |
 
-Create custom commands in **Settings → Commands**. Template import/export is local and includes only triggers and prompts—never keys, drafts, history, or recordings.
+Create your own commands under **Settings → Commands**.
 
-## Reply composer
+## Draft a reply
 
-Flick never automatically inspects the screen, chat history, or accessibility tree. It captures only an explicit text selection, restores the clipboard, and opens a compact draft window.
+1. Select only the message or text you want Flick to use as context.
+2. Press your reply shortcut.
+3. Choose a tone and describe what you want to say.
+4. Generate the reply and edit it if needed.
+5. Choose **Copy** or **Insert into app**.
 
-1. Select the message(s) to reference.
-2. Open the composer, choose a tone, and describe the response.
-3. Generate and edit the draft.
-4. Choose **Copy** or explicitly confirm **Insert into app**.
+Flick does not scan your screen or read whole conversations. It uses only the text you deliberately select, and it checks that you are still in the original app before inserting anything.
 
-Context is treated as untrusted prompt data and is sent only when you choose **Generate**. Flick verifies the original target before insertion; on target change, protected fields, or paste failure, the draft remains available to copy.
+## Dictate
 
-## Dictation, local models, and optional cloud transcription
+### Local models
 
-Dictation records locally, resamples on-device, applies adaptive voice-activity detection, and can clean filler words or apply personal corrections. Press `Escape` during recording to discard it without transcription, history, or paste-back. The transcription pill can be placed at the bottom-center, bottom-left, bottom-right, or top-center of your display from **Settings → Dictate**.
+Flick’s catalog contains **370 pinned model downloads** from Hugging Face, including Whisper, Parakeet TDT/CTC/RNNT, Moonshine, Canary, Qwen3 ASR, SenseVoice, and other families supported by the speech engine. Search by family or show every available quantization when you want more control.
 
-The local catalog includes English-focused and multilingual Whisper tiers, Parakeet TDT 0.6B v3, Canary 180M Flash, Qwen3-ASR 0.6B, SenseVoice Small, and Moonshine Tiny. Each GGUF artifact comes from a pinned Hugging Face revision; it streams to `.partial`, resumes only on confirmed byte ranges, verifies SHA-256, and is atomically installed only after verification. The settings UI disables languages, automatic detection, and translation that the selected model does not support. Compatible user-supplied Whisper `.bin` and GGUF files are discovered locally and never uploaded.
+Each listed file has a pinned source revision, expected size, and SHA-256 hash. Downloads use a temporary partial file, resume only when the server confirms the requested range, and become selectable only after verification. Every model page links to its source and license.
 
-Cloud transcription is strictly opt-in. Flick sends audio only after you select the OpenAI-compatible cloud provider, save a distinct transcription API key in your OS keychain, and start dictation. The endpoint must be HTTPS except for a local development server; Flick does not silently fall back from local to cloud. Cloud providers receive the recorded audio and selected language/model only to fulfill that transcription request.
+The catalog is broader than the release acceptance set: not every model has been tested for speed and accuracy on every device. Release builds run real audio through representative Whisper, Moonshine, and Parakeet models on supported targets; Flick turns engine failures into recoverable errors instead of allowing the desktop app to crash.
 
-Optional AI cleanup is off by default and sends only the final text transcript—not audio—to the configured provider.
+### Cloud models
 
-### Linux notes
+Cloud dictation is optional and OpenAI-compatible. Flick sends audio only when you choose the cloud provider and start a dictation. The transcription key is separate from your writing-provider key and is stored in your operating system keychain.
 
-The recording overlay stays hidden by default on Linux because some X11/Wayland compositors can steal focus and make paste-back unsafe. Flick prefers `xdotool` on X11 and `wtype` (or `dotool`) on Wayland when installed, then falls back to native input. Where Wayland restricts global shortcuts, bind your desktop shortcut to a Flick CLI action.
+### Activation modes
 
-## Privacy and safety
+- **Toggle:** press once to start and once to stop.
+- **Push to talk:** hold the shortcut while speaking.
+- **Hold or toggle:** tap for toggle behavior or hold for push to talk.
 
-- **BYOK:** Gemini, OpenRouter, and OpenAI-compatible endpoints communicate directly with the provider you configure.
-- **Keychain-backed credentials:** API keys are not stored in the settings JSON file.
-- **Selection-only context:** No automatic OCR, screen capture, chat-history collection, or accessibility-tree scraping.
-- **Protected-target refusal:** Flick blocks known credential-manager apps and user exclusions. Windows also checks the native password-field flag without reading field contents.
-- **Safe insertion:** Dictation, replies, and text transformations verify the original target and restore text clipboard contents after paste transactions. If a transformation finishes after focus changes, Flick refuses the paste and keeps the result available through **Copy last result** for the current session.
-- **Local deletion:** Clear history, retained recordings, downloaded models, and stored keys from Settings.
-- **No telemetry by default:** Diagnostics export is explicit and redacted; it excludes credentials, clipboard data, drafts, history contents, and prompts.
+## Shortcuts
 
-## Shortcuts and CLI
+These are the defaults. You can replace them in Settings.
 
 | Action | Windows / Linux | macOS |
 | --- | --- | --- |
-| Reply composer | `Ctrl+Shift+Space` | `Cmd+Shift+Space` |
+| Reply assistant | `Ctrl+Shift+Space` | `Cmd+Shift+Space` |
 | Dictation | `Ctrl+Space` | `Cmd+Space` |
 | Copy last result | `Ctrl+Alt+C` | `Cmd+Alt+C` |
 | Paste as plain text | `Ctrl+Alt+V` | `Cmd+Alt+V` |
 
-Desktop environments and external hotkey tools can route a fixed action set to a running Flick instance:
+## If something is not working
+
+- **The microphone does not start:** allow microphone access, then check the selected device under **Dictate**.
+- **A shortcut does nothing:** record it again in Settings and make sure another Flick action does not use it.
+- **Nothing was pasted:** Flick refuses to paste after you switch apps or into a protected field. Use **Copy last result** instead.
+- **A model download stopped:** choose Download again. Flick will safely resume or restart it and verify the whole file.
+- **A model cannot be used:** remove the failed download and try the recommended smaller model. The app remains running even if the native engine fails.
+- **Cloud generation fails:** check the provider endpoint, model name, and key under **Write** or **Dictate**.
+- **Wayland blocks the shortcut:** bind your desktop shortcut to one of the Flick commands listed below.
+
+If the issue continues, export redacted diagnostics from Settings and attach them to a [GitHub issue](https://github.com/rixabhh/flick/issues). Diagnostics exclude API keys, clipboard text, prompts, replies, and transcript contents.
+
+## Privacy
+
+- Local dictation keeps audio on your device.
+- Cloud dictation is opt-in and uses only the provider you configure.
+- Reply context comes only from your explicit text selection.
+- API keys are stored in the operating system keychain.
+- Flick refuses protected password fields and apps you exclude.
+- Recordings and history are off by default and can be deleted from Settings.
+- Flick has no telemetry by default.
+
+Optional AI cleanup sends only the finished transcript—not the audio—to your configured writing provider.
+
+## Desktop commands
+
+Desktop shortcut tools can send a fixed action to a running Flick instance:
 
 ```text
 flick --open-settings
@@ -124,19 +151,19 @@ flick --cancel-dictation
 flick --copy-last-result
 ```
 
-Unknown arguments are ignored. The CLI never accepts arbitrary text, prompts, or shell commands.
+The command line does not accept text, prompts, or shell commands.
 
-## Platforms
+<details>
+<summary><strong>Linux notes</strong></summary>
 
-| Platform | Target | Notes |
-| --- | --- | --- |
-| Windows | x64, ARM64 | Native password-field protection is available. |
-| macOS | Apple Silicon, Intel | Grant microphone/accessibility permissions when prompted. |
-| Linux | x64 | X11 is first-class; Wayland may need an input helper and desktop shortcut. |
+The recording overlay is hidden by default on Linux because some compositors can take focus from the active text field. Flick prefers `xdotool` on X11 and `wtype` or `dotool` on Wayland when available. Restricted Wayland desktops may require a desktop shortcut that calls the Flick command line.
 
-## Develop and verify
+</details>
 
-Prerequisites: Node.js 20+, Rust 1.77+, and [Tauri v2 platform prerequisites](https://v2.tauri.app/start/prerequisites/).
+<details>
+<summary><strong>Development and verification</strong></summary>
+
+Install Node.js 20+, Rust 1.77+, and the [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/).
 
 ```bash
 git clone https://github.com/rixabhh/flick.git
@@ -151,26 +178,19 @@ cargo test --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 ```
 
-The real local-model smoke test is opt-in and needs local model/audio fixtures:
+CI has three clear responsibilities: **Verify** checks source and tests, **Release** builds and smoke-tests installers without publishing by default, and GitHub’s managed workflow deploys **Pages**. A release draft is created only after every platform succeeds.
 
-```text
-FLICK_WHISPER_MODEL=/path/to/ggml-tiny.en.bin
-FLICK_WHISPER_SAMPLE=/path/to/sample.wav
-cargo test --manifest-path src-tauri/Cargo.toml transcribes_real_whisper_audio -- --ignored
-```
+The repository structure is straightforward:
 
-CI verifies frontend, browser UI, and native targets across Windows x64/ARM64, macOS Intel/Apple Silicon, and Linux x64. GitHub-hosted macOS builds use current macOS 15 runners (`macos-15-intel` and `macos-15`) so Intel packaging does not depend on the retired macOS 13 image. Physical hardware, compositor, signing, and notarization checks remain release gates.
+- `src-tauri/src/` — Rust desktop services, speech, models, shortcuts, and native integration.
+- `src/lib/` — Svelte settings, reply assistant, overlays, and UI helpers.
+- `docs/` — the GitHub Pages product site.
+- `.github/workflows/` — Verify and Release automation.
+- `RELEASE_CHECKLIST.md` — signing, notarization, hardware, and promotion gates.
+- `MARKET_READY_PLAN.md` — the product hardening plan and acceptance criteria.
 
-Release packaging is separate from Verify and Pages. A manual **build-only** Release run tests the real installers without publishing. Tagged candidates are assembled as drafts only after every platform succeeds, with SHA-256 checksums. Follow the [release procedure](RELEASE_CHECKLIST.md#reproducible-build-and-draft-process); do not use `main` as a release tag.
-
-## Project structure
-
-- `src-tauri/src/` — Rust services for input, dictation, models, history, providers, diagnostics, and native integration.
-- `src/lib/` — Svelte command center, composer, overlay, models, history, and UI helpers.
-- `.github/workflows/` — verification and draft-release workflows.
-- `CHANGELOG.md` — beta release notes.
-- `RELEASE_CHECKLIST.md` — signing and promotion checklist.
+</details>
 
 ## License
 
-Flick is available under the [MIT License](LICENSE).
+Flick is available under the [MIT License](LICENSE). Model files keep their own upstream licenses; the Models screen links to each one.

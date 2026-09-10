@@ -9,6 +9,7 @@
   import CommandList from "./CommandList.svelte";
   import Models from "./Models.svelte";
   import History from "./History.svelte";
+  import ShortcutInput from "./ShortcutInput.svelte";
   import { formatCorrections, parseCorrections } from "./dictation-settings.js";
   import { supportedLanguages, translate } from "./i18n.js";
   import logoUrl from "../assets/flick-logo.png";
@@ -51,7 +52,7 @@
   });
 
   let activeTab = $state("home");
-  let version = $state("2.0.0-beta");
+  let version = $state("2.0.1");
   let inputDevices = $state([]);
   let inputLevel = $state(0);
   let dictationRuntime = $state(null);
@@ -66,6 +67,13 @@
   let saveQueue = Promise.resolve();
   let settingsRevision = 0;
   let failedPatches = {};
+
+  const shortcutFields = ["composer_shortcut", "dictation_shortcut", "copy_last_result_shortcut", "paste_plain_text_shortcut"];
+  const shortcutConflicts = (field) => shortcutFields.filter((key) => key !== field).map((key) => config[key]);
+  async function changeShortcut(field, value) {
+    if (!await savePatch({ [field]: value })) throw new Error("Shortcut was not saved. Please retry.");
+    config[field] = value;
+  }
 
   function savePatch(patch) {
     const snapshot = JSON.parse(JSON.stringify(patch));
@@ -125,7 +133,7 @@
   // Individual options are disabled from the active model's explicit
   // capability data, so selecting a model never silently changes the spoken
   // language a user chose earlier.
-  const dictationLanguageOptions = [
+  const knownDictationLanguages = [
     ["en", "English"], ["es", "Spanish"], ["fr", "French"], ["de", "German"],
     ["hi", "Hindi"], ["zh", "Chinese"], ["yue", "Cantonese"], ["ja", "Japanese"],
     ["ko", "Korean"], ["ar", "Arabic"], ["pt", "Portuguese"], ["it", "Italian"],
@@ -135,6 +143,13 @@
     ["fi", "Finnish"], ["hu", "Hungarian"], ["mk", "Macedonian"], ["ms", "Malay"],
     ["ro", "Romanian"], ["sv", "Swedish"], ["fil", "Filipino"],
   ];
+
+  const dictationLanguageOptions = $derived([
+    ...knownDictationLanguages,
+    ...(localModelCapabilities?.supported_languages || [])
+      .filter((code) => !knownDictationLanguages.some(([known]) => known === code))
+      .map((code) => { let name = code.toUpperCase(); try { name = new Intl.DisplayNames(["en"], { type: "language" }).of(code) || name; } catch {} return [code, name]; }),
+  ]);
 
   async function refreshInputDevices() {
     try {
@@ -480,6 +495,7 @@
       </div>
     {:else if activeTab === "write"}
       <div class="panel-section animate-fade-in">
+        <ShortcutInput label="Reply composer shortcut" value={config.composer_shortcut} conflicts={shortcutConflicts("composer_shortcut")} onChange={(value) => changeShortcut("composer_shortcut", value)} />
         <div class="section-header">
           <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
@@ -553,7 +569,7 @@
           <label class="setting-field"><span>Cloud model</span><input type="text" bind:value={config.dictation_cloud_model} onblur={() => updateConfig("dictation_cloud_model", config.dictation_cloud_model)} placeholder="gpt-4o-mini-transcribe" /><small>This provider calls <span class="mono">/audio/transcriptions</span>.</small></label>
           <ApiKeyInput provider="dictation-openai-compatible" model={config.dictation_cloud_model} customBaseUrl={config.dictation_cloud_base_url} showTest={false} providerLabel="cloud transcription" apiKeyUrl="https://platform.openai.com/api-keys" />
         {/if}
-        <label class="setting-field"><span>Dictation shortcut</span><input type="text" bind:value={config.dictation_shortcut} onblur={() => updateConfig("dictation_shortcut", config.dictation_shortcut)} /></label>
+        <ShortcutInput label="Dictation shortcut" value={config.dictation_shortcut} conflicts={shortcutConflicts("dictation_shortcut")} onChange={(value) => changeShortcut("dictation_shortcut", value)} />
         <label class="setting-field"><span>Floating pill position</span><select bind:value={config.floating_pill_position} onchange={updateFloatingPillPosition}><option value="bottom-center">Bottom center</option><option value="bottom-left">Bottom left</option><option value="bottom-right">Bottom right</option><option value="top-center">Top center</option></select><small>Used for both dictation and transformation status. It stays out of your active app until needed.</small></label>
         <label class="setting-field"><span>Activation</span><select bind:value={config.dictation_mode} onchange={() => updateConfig("dictation_mode", config.dictation_mode)}><option value="hold-or-toggle">Hold or toggle</option><option value="push-to-talk">Push to talk</option><option value="toggle">Toggle</option></select></label>
         <label class="setting-field"><span>Microphone</span><select bind:value={config.dictation_device_id} onchange={() => updateConfig("dictation_device_id", config.dictation_device_id)}><option value="">System default</option>{#each inputDevices as device}<option value={device.id}>{device.name}{device.is_default ? " (default)" : ""}</option>{/each}</select></label>
@@ -593,8 +609,8 @@
         <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Enable Flick</span><span class="toggle-label-desc">Listen for commands and the reply shortcut</span></div><label class="toggle"><input type="checkbox" checked={config.enabled} onchange={toggleEnabled} /><span class="toggle-slider"></span></label></div>
         <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Launch at login</span><span class="toggle-label-desc">Start Flick automatically when you sign in</span></div><label class="toggle"><input type="checkbox" checked={config.launch_at_login} onchange={toggleLaunchAtLogin} /><span class="toggle-slider"></span></label></div>
         <div class="toggle-container"><div class="toggle-label"><span class="toggle-label-text">Show completion toast</span><span class="toggle-label-desc">Confirm successful transformations</span></div><label class="toggle"><input type="checkbox" checked={config.show_done_toast} onchange={toggleShowDoneToast} /><span class="toggle-slider"></span></label></div>
-        <label class="setting-field"><span>Copy last result shortcut</span><input type="text" bind:value={config.copy_last_result_shortcut} onblur={() => updateConfig("copy_last_result_shortcut", config.copy_last_result_shortcut)} /><small>Copies the newest optional local history entry. Default: Ctrl+Alt+C.</small></label>
-        <label class="setting-field"><span>Paste as plain text shortcut</span><input type="text" bind:value={config.paste_plain_text_shortcut} onblur={() => updateConfig("paste_plain_text_shortcut", config.paste_plain_text_shortcut)} /><small>Pastes the clipboard’s text representation without source formatting. Default: Ctrl+Alt+V.</small></label>
+        <ShortcutInput label="Copy last result shortcut" value={config.copy_last_result_shortcut} conflicts={shortcutConflicts("copy_last_result_shortcut")} onChange={(value) => changeShortcut("copy_last_result_shortcut", value)} />
+        <ShortcutInput label="Paste as plain text shortcut" value={config.paste_plain_text_shortcut} conflicts={shortcutConflicts("paste_plain_text_shortcut")} onChange={(value) => changeShortcut("paste_plain_text_shortcut", value)} />
         <label class="setting-field"><span>Theme</span><select bind:value={config.theme} onchange={() => updateConfig("theme", config.theme)}><option value="system">System</option><option value="dark">Dark</option><option value="light">Light</option></select></label>
         <label class="setting-field"><span>{t("settings.language")}</span><select bind:value={config.app_language} onchange={() => updateConfig("app_language", config.app_language)}>{#each supportedLanguages as language}<option value={language.id}>{t(language.labelKey)}</option>{/each}</select><small>{t("language.note")}</small></label>
         <div class="panel quick-card"><strong>Diagnostics</strong><span class="text-secondary">Creates a local support bundle without API keys, drafts, clipboard data, or transcript history.</span><button class="btn btn-secondary" onclick={exportDiagnostics}>Export diagnostics</button>{#if diagnosticsPath}<small class="mono">Saved: {diagnosticsPath}</small>{/if}</div>

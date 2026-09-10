@@ -2,6 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
+  import { openUrl } from "@tauri-apps/plugin-opener";
 
   let models = $state([]);
   let downloading = $state("");
@@ -16,6 +17,18 @@
   let refreshRequest = 0;
   let downloadRevision = 0;
   let disposed = false;
+  let query = $state("");
+  let family = $state("");
+  let allPrecisions = $state(false);
+  let installedOnly = $state(false);
+  let limit = $state(12);
+  const families = $derived([...new Set(models.map((model) => (model.engine || "Compatible").split(" / ")[0]))].sort());
+  const filtered = $derived(models.filter((model) =>
+    (allPrecisions || model.recommended !== false || model.installed || model.available_locally || downloading === model.id)
+    && (!installedOnly || model.installed || model.available_locally)
+    && (!family || (model.engine || "Compatible").split(" / ")[0] === family)
+    && (!query || `${model.name} ${model.engine} ${model.language} ${model.quant || ""}`.toLowerCase().includes(query.toLowerCase()))));
+  $effect(() => { query; family; allPrecisions; installedOnly; limit = 12; });
   const busy = () => loading || Boolean(verifying) || Boolean(removing);
 
   async function refresh() {
@@ -144,7 +157,14 @@
   <div class="heading"><div><h2>Speech models</h2><p>Pick one model to dictate without an internet connection. Flick verifies every download before it can be used. {models.some((model) => model.installed) ? `${size(installedSize())} ready on this computer.` : "Start with Tiny English for the fastest setup."}</p></div><button onclick={refresh} disabled={loading}>{loading ? "Checking…" : "Refresh"}</button></div>
   {#if discoveryError || error || watcherError}<p class="error" role="alert">{discoveryError || error || watcherError}</p>{/if}
   {#if loading}<div class="loading" aria-live="polite">Checking what is already on this computer…</div>{/if}
-  {#each models as model}
+  <div class="filters">
+    <input aria-label="Search speech models" type="search" bind:value={query} placeholder="Search Parakeet, Whisper, a language…" />
+    <select aria-label="Model family" bind:value={family}><option value="">All model families</option>{#each families as item}<option value={item}>{item}</option>{/each}</select>
+    <label><input type="checkbox" bind:checked={allPrecisions} /> All quantizations</label>
+    <label><input type="checkbox" bind:checked={installedOnly} /> On this device</label>
+  </div>
+  <p class="catalog-note">{models.length} local artifacts · {filtered.length} matching. Q4–Q6 use less storage; Q8 balances size and precision. F16/F32 need more memory. Model licenses and hardware requirements vary.</p>
+  {#each filtered.slice(0, limit) as model (model.id)}
     {@const status = readiness(model)}
     <article>
       <div><strong>{model.name}</strong><p>{model.description}</p><span>{model.engine} · {model.language} · {size(model.size_bytes)}</span><div class="capabilities"><span class="capability local">On device</span><span class="capability">{languageBadge(model)}</span>{#if model.supports_language_detection}<span class="capability detection">Auto-detect</span>{/if}{#if model.supports_translation}<span class="capability translation">English translation</span>{:else}<span class="capability muted">Transcription only</span>{/if}</div><span class:ready={status.tone === "ready"} class:attention={status.tone === "attention"} class:downloading={status.tone === "downloading" || status.tone === "verifying"} class="model-status" role="status">{status.label}</span></div>
@@ -156,10 +176,14 @@
         {#if downloading === model.id}<button class="remove" onclick={() => cancel(model.id)} disabled={Boolean(cancelling)}>{cancelling === model.id ? "Cancelling…" : "Cancel"}</button>{:else}<button class="download" onclick={() => download(model.id)} disabled={Boolean(downloading) || busy()}>Download</button>{/if}
       {/if}
       {#if progress[model.id] && downloading === model.id}<progress value={progress[model.id].received} max={progress[model.id].total} aria-label={`Downloading ${model.name}`} aria-valuetext={`${downloadPercent(model) ?? 0}% downloaded`}></progress>{/if}
+      {#if model.source_url}<button class="model-source" onclick={() => openUrl(model.source_url).catch((message) => error = String(message))}>Model card & license · {model.license}</button>{/if}
     </article>
   {/each}
+  {#if !loading && !filtered.length}<p class="catalog-note">No models match. Try another family or enable all quantizations.</p>{/if}
+  {#if filtered.length > limit}<button class="show-more" onclick={() => limit += 12}>Show more models ({filtered.length - limit} remaining)</button>{/if}
 </section>
 
 <style>
+  .filters { display:flex; flex-wrap:wrap; gap:9px; }.filters > input { flex:1 1 100%; }.filters > input,.filters select,.show-more { border:1px solid var(--border); border-radius:8px; padding:9px; background:var(--bg-elevated); color:var(--text-primary); font:inherit; font-size:12px; }.filters label { display:flex; align-items:center; gap:5px; color:var(--text-secondary); font-size:11px; }.catalog-note { color:var(--text-secondary); font-size:11px; line-height:1.5; }.model-source { grid-column:1/-1; justify-self:start; font-size:10px; padding:0!important; border:0!important; background:transparent!important; color:var(--text-secondary)!important; }.show-more { cursor:pointer; }
   .models{display:flex;flex-direction:column;gap:12px}.heading{display:flex;justify-content:space-between;gap:14px;align-items:start}.heading h2{font-size:.98rem}.heading p,article p,article span{color:var(--text-secondary);font-size:.8rem;line-height:1.45}.heading button,article button{border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-primary);border-radius:7px;padding:7px 10px;cursor:pointer}.heading button:disabled,article button:disabled{opacity:.58;cursor:not-allowed}.download{background:#f2f4f8!important;color:#101113!important;border-color:#f2f4f8!important}.remove{color:var(--error)!important}.active{color:var(--accent)!important;font-weight:600}.actions{display:flex;gap:6px}.loading{padding:11px 12px;border:1px solid var(--border);border-radius:8px;color:var(--text-secondary);font-size:.82rem}article{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;border:1px solid var(--border);padding:14px;border-radius:8px}article p{margin:5px 0}.error{color:var(--error);font-size:.8rem}progress{grid-column:1 / -1;width:100%;accent-color:var(--accent)}.capabilities{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}.capability{display:inline-flex;padding:2px 6px;border:1px solid var(--border);border-radius:999px;color:var(--text-muted);background:var(--bg-primary);font-size:.68rem;line-height:1.25}.capability.local{color:var(--success);border-color:rgba(121,217,159,.24);background:var(--success-dim)}.capability.detection{color:#dcb572;border-color:rgba(220,181,114,.28);background:rgba(220,181,114,.1)}.capability.translation{color:var(--accent);border-color:rgba(143,183,255,.26);background:var(--accent-glow)}.capability.muted{color:var(--text-secondary)}.model-status{display:inline-flex;margin-top:10px;font-size:.74rem;color:var(--text-muted)}.model-status.ready{color:var(--success)}.model-status.attention{color:#dcb572}.model-status.downloading{color:var(--accent)}
 </style>
