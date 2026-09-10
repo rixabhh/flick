@@ -12,7 +12,7 @@
 
 Flick is a local-first desktop writing assistant for Windows, macOS, and Linux. Transform text in place, dictate with a local model or an explicitly configured cloud provider, and draft thoughtful replies from an intentional text selection. Bring your own AI provider and decide where transcription runs.
 
-> **Beta status:** Stable promotion requires signed/notarized per-platform builds and native acceptance evidence. See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
+> **Beta status:** Stable promotion requires signed/notarized per-platform builds and native acceptance evidence. See [MARKET_READY_PLAN.md](MARKET_READY_PLAN.md) and [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
 ## What Flick does
 
