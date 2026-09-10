@@ -18,13 +18,13 @@ Flick is a local-first desktop writing assistant for Windows, macOS, and Linux. 
 
 - **Write anywhere:** Type `!fix`, `!formal`, `!translate:spanish`, or a custom command in a text field. Flick replaces the current text using your configured provider.
 - **Draft replies deliberately:** Select only the context you want, choose a tone, provide a rough instruction, then edit, copy, or explicitly insert the result.
-- **Dictate your way:** Record through a chosen microphone with adaptive voice-activity detection, then use local Whisper or Parakeet models—or explicitly opt into an OpenAI-compatible cloud transcription endpoint.
+- **Dictate your way:** Record through a chosen microphone with adaptive voice-activity detection, then use local Whisper, Parakeet, Canary, Qwen3 ASR, SenseVoice, or Moonshine models—or explicitly opt into an OpenAI-compatible cloud transcription endpoint.
 - **Keep control:** Configure shortcuts, exclusions, plain-text paste, command templates, optional history, diagnostics export, and English/Spanish UI.
 
 ## Quick start
 
 1. Open **Settings → Write**, select Gemini, OpenRouter, or an OpenAI-compatible endpoint, then save your own key. Local compatible endpoints may omit a key.
-2. Open **Models** and download a verified local Whisper or Parakeet speech model. If you prefer cloud dictation, select the cloud provider under **Dictate**, set its endpoint/model, and save its separate API key.
+2. Open **Models** and download a verified local speech model. Flick shows the engine, disk size, languages, auto-detection, and translation capability before you choose. If you prefer cloud dictation, select the cloud provider under **Dictate**, set its endpoint/model, and save its separate API key.
 3. Open **Dictate** and choose a microphone plus Toggle, Push-to-talk, or Hold-or-toggle activation.
 4. Use Flick in a supported text field:
    - Type text followed by a `!command`.
@@ -85,7 +85,7 @@ Context is treated as untrusted prompt data and is sent only when you choose **G
 
 Dictation records locally, resamples on-device, applies adaptive voice-activity detection, and can clean filler words or apply personal corrections. Press `Escape` during recording to discard it without transcription, history, or paste-back. The transcription pill can be placed at the bottom-center, bottom-left, bottom-right, or top-center of your display from **Settings → Dictate**.
 
-The local catalog includes English-focused and multilingual Whisper tiers plus Parakeet TDT 0.6B v3 in GGUF format. Model downloads are direct HTTPS transfers from pinned Hugging Face revisions; they stream to `.partial`, resume only on confirmed byte ranges, verify SHA-256, and atomically install only verified bytes. Compatible user-supplied Whisper `.bin` and GGUF files are discovered locally and never uploaded. Translation to English is offered only when the selected local Whisper model supports it.
+The local catalog includes English-focused and multilingual Whisper tiers, Parakeet TDT 0.6B v3, Canary 180M Flash, Qwen3-ASR 0.6B, SenseVoice Small, and Moonshine Tiny. Each GGUF artifact comes from a pinned Hugging Face revision; it streams to `.partial`, resumes only on confirmed byte ranges, verifies SHA-256, and is atomically installed only after verification. The settings UI disables languages, automatic detection, and translation that the selected model does not support. Compatible user-supplied Whisper `.bin` and GGUF files are discovered locally and never uploaded.
 
 Cloud transcription is strictly opt-in. Flick sends audio only after you select the OpenAI-compatible cloud provider, save a distinct transcription API key in your OS keychain, and start dictation. The endpoint must be HTTPS except for a local development server; Flick does not silently fall back from local to cloud. Cloud providers receive the recorded audio and selected language/model only to fulfill that transcription request.
 

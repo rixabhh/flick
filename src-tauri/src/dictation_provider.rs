@@ -39,7 +39,7 @@ impl DictationProviderInfo {
     fn local_whisper() -> Self {
         Self {
             id: LOCAL_WHISPER_PROVIDER_ID.to_string(),
-            label: "Local models (Whisper & Parakeet)".to_string(),
+            label: "Local models (Whisper & verified GGUF)".to_string(),
             kind: DictationProviderKind::Local,
             sends_audio_off_device: false,
             supports_translation: true,

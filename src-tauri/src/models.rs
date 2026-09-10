@@ -166,6 +166,49 @@ const CATALOG: &[CatalogModel] = &[CatalogModel {
     sha256: "5859f77944efcd8eafa23a6350731960b2b55b2203df51f319665c807d802cc7",
     size_bytes: 739_508_576,
     english_only: false,
+}, CatalogModel {
+    // Pinned catalog entries are imported from Handy's verified GGUF registry.
+    // Each remains independently streamed, hashed, and atomically promoted by
+    // Flick; the source catalog is metadata, never a trust bypass.
+    id: "canary-180m-flash-q8",
+    name: "Canary 180M Flash",
+    description: "Small, fast English, German, Spanish, and French dictation with verified English translation.",
+    language: "English, German, Spanish, French",
+    file_name: "canary-180m-flash-Q8_0.gguf",
+    url: "https://huggingface.co/handy-computer/canary-180m-flash-gguf/resolve/b147f9dc52b59f0998e410540a84727bd86457fd/canary-180m-flash-Q8_0.gguf?download=true",
+    sha256: "e13c7f5d0952b056a027cfffec13e3a3a134d1608babed24f983568f141e297c",
+    size_bytes: 218_447_552,
+    english_only: false,
+}, CatalogModel {
+    id: "qwen3-asr-0.6b-q8",
+    name: "Qwen3-ASR 0.6B",
+    description: "Accurate 30-language dictation with automatic language detection; transcription only.",
+    language: "30 languages",
+    file_name: "Qwen3-ASR-0.6B-Q8_0.gguf",
+    url: "https://huggingface.co/handy-computer/Qwen3-ASR-0.6B-gguf/resolve/e4e16599b900eb0cb36e524514756bb92eb092b7/Qwen3-ASR-0.6B-Q8_0.gguf?download=true",
+    sha256: "f081b2d5e23bd669d92cc331d722a8a0681943b8e6f34b48996fd5c319b5acd8",
+    size_bytes: 850_423_456,
+    english_only: false,
+}, CatalogModel {
+    id: "sensevoice-small-q8",
+    name: "SenseVoice Small",
+    description: "Fast Chinese, Cantonese, English, Japanese, and Korean dictation with automatic language detection.",
+    language: "Chinese, Cantonese, English, Japanese, Korean",
+    file_name: "SenseVoiceSmall-Q8_0.gguf",
+    url: "https://huggingface.co/handy-computer/SenseVoiceSmall-gguf/resolve/4a08b8e900b38a977e32eb08d5d0697d6e72ba04/SenseVoiceSmall-Q8_0.gguf?download=true",
+    sha256: "6c759ee4c9748c9b3f7a5a60ca74f0f7e685fb9d45d1378fce7cfd62f59adf29",
+    size_bytes: 252_684_608,
+    english_only: false,
+}, CatalogModel {
+    id: "moonshine-tiny-q8",
+    name: "Moonshine Tiny",
+    description: "Ultra-lightweight English dictation for quick, offline capture; transcription only.",
+    language: "English",
+    file_name: "moonshine-tiny-Q8_0.gguf",
+    url: "https://huggingface.co/handy-computer/moonshine-tiny-gguf/resolve/f5c11906eba3f44cf305eed30feb9cbfb0b4b9d0/moonshine-tiny-Q8_0.gguf?download=true",
+    sha256: "2fd348d7b38f97d309cc3ec6848f3f57f537b80244950f07d2637e463f95a3a1",
+    size_bytes: 35_466_912,
+    english_only: true,
 }];
 
 fn catalog_model(id: &str) -> Result<&'static CatalogModel> {
@@ -252,13 +295,6 @@ async fn verified_model_path(app: &AppHandle, id: &str) -> Result<Option<PathBuf
     Ok((path.is_file() && verify_file(&path, model.sha256).await?).then_some(path))
 }
 
-pub fn model_is_english_only(id: &str) -> Result<bool> {
-    if custom_file_name(id).is_some() {
-        return Ok(false);
-    }
-    Ok(catalog_model(id)?.english_only)
-}
-
 /// Register one model transfer at a time. Local speech models are large enough
 /// that competing downloads make the app appear unresponsive and can exhaust
 /// disk space on a laptop. A later queue can replace this guard without
@@ -283,30 +319,69 @@ fn begin_model_download(
     Ok(cancel)
 }
 
-/// Only catalogued Whisper models advertise the translation task. Custom and
-/// Parakeet GGUF files are deliberately conservative: Flick will transcribe
-/// them locally but never asks them to translate unless a future catalog entry
-/// has verified that capability.
+/// Translation is opt-in per pinned catalog artifact. Custom models are
+/// deliberately conservative: Flick will transcribe them locally but never
+/// sends a translation task unless a catalog entry verifies the capability.
 pub fn model_supports_translation(id: &str) -> Result<bool> {
     if custom_file_name(id).is_some() {
         return Ok(false);
     }
     let model = catalog_model(id)?;
-    Ok(model.id.starts_with("whisper-") && !model.english_only)
+    Ok((model.id.starts_with("whisper-") && !model.english_only)
+        || model.id == "canary-180m-flash-q8")
 }
 
-// Kept alongside the pinned Parakeet artifact rather than inferred from a
-// display label. The model's language selector is not a promise that every
-// language is safe to send as a hint to every engine.
+// Kept alongside the pinned artifacts rather than inferred from display labels
+// or file extensions. The language selector is not a promise that every
+// language or automatic detection mode is safe to send to every engine.
 const PARAKEET_V3_LANGUAGES: &[&str] = &[
     "bg", "hr", "cs", "da", "nl", "en", "et", "fi", "fr", "de", "el", "hu", "it", "lv",
     "lt", "mt", "pl", "pt", "ro", "sk", "sl", "es", "sv", "ru", "uk",
 ];
 
+const CANARY_180M_LANGUAGES: &[&str] = &["en", "de", "es", "fr"];
+const QWEN3_ASR_LANGUAGES: &[&str] = &[
+    "zh", "en", "yue", "ar", "de", "fr", "es", "pt", "id", "it", "ko", "ru", "th", "vi", "ja",
+    "tr", "hi", "ms", "nl", "sv", "da", "fi", "pl", "cs", "fil", "fa", "el", "ro", "hu", "mk",
+];
+const SENSEVOICE_LANGUAGES: &[&str] = &["zh", "yue", "en", "ja", "ko"];
+
+fn catalog_supported_languages(model: &CatalogModel) -> &'static [&'static str] {
+    match model.id {
+        "parakeet-tdt-0.6b-v3-q8" => PARAKEET_V3_LANGUAGES,
+        "canary-180m-flash-q8" => CANARY_180M_LANGUAGES,
+        "qwen3-asr-0.6b-q8" => QWEN3_ASR_LANGUAGES,
+        "sensevoice-small-q8" => SENSEVOICE_LANGUAGES,
+        _ if model.english_only => &["en"],
+        _ => &[],
+    }
+}
+
+fn catalog_supports_language_detection(model: &CatalogModel) -> bool {
+    !model.english_only
+        && model.id != "canary-180m-flash-q8"
+}
+
+fn catalog_engine(model: &CatalogModel) -> &'static str {
+    if model.file_name.ends_with(".gguf") {
+        match model.id {
+            "parakeet-tdt-0.6b-v3-q8" => "Parakeet / GGUF",
+            "canary-180m-flash-q8" => "Canary / GGUF",
+            "qwen3-asr-0.6b-q8" => "Qwen3 ASR / GGUF",
+            "sensevoice-small-q8" => "SenseVoice / GGUF",
+            "moonshine-tiny-q8" => "Moonshine / GGUF",
+            _ => "Compatible GGUF",
+        }
+    } else {
+        "Whisper / GGML"
+    }
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct LocalModelCapabilities {
     pub id: String,
     pub supports_translation: bool,
+    pub supports_language_detection: bool,
     /// Empty means the catalog has no finite language restriction to present
     /// (multilingual Whisper) or Flick cannot verify a custom model's set.
     pub supported_languages: Vec<String>,
@@ -317,29 +392,28 @@ pub fn local_model_capabilities(id: &str) -> Result<LocalModelCapabilities> {
         return Ok(LocalModelCapabilities {
             id: id.to_string(),
             supports_translation: false,
+            supports_language_detection: true,
             supported_languages: Vec::new(),
         });
     }
     let model = catalog_model(id)?;
-    let supported_languages = if model.id == "parakeet-tdt-0.6b-v3-q8" {
-        PARAKEET_V3_LANGUAGES.iter().map(|language| (*language).to_string()).collect()
-    } else if model.english_only {
-        vec!["en".to_string()]
-    } else {
-        Vec::new()
-    };
+    let supported_languages = catalog_supported_languages(model)
+        .iter()
+        .map(|language| (*language).to_string())
+        .collect();
     Ok(LocalModelCapabilities {
         id: id.to_string(),
         supports_translation: model_supports_translation(id)?,
+        supports_language_detection: catalog_supports_language_detection(model),
         supported_languages,
     })
 }
 
 pub fn model_supports_language(id: &str, language: &str) -> Result<bool> {
-    if language == "auto" {
-        return Ok(true);
-    }
     let capabilities = local_model_capabilities(id)?;
+    if language == "auto" {
+        return Ok(capabilities.supports_language_detection);
+    }
     Ok(capabilities.supported_languages.is_empty()
         || capabilities.supported_languages.iter().any(|supported| supported == language))
 }
@@ -383,11 +457,7 @@ pub async fn list_local_models(app: AppHandle) -> Result<Vec<ModelInfo>, String>
             name: model.name.to_string(),
             description: model.description.to_string(),
             language: model.language.to_string(),
-            engine: if model.file_name.ends_with(".gguf") {
-                "Parakeet / GGUF".to_string()
-            } else {
-                "Whisper / GGML".to_string()
-            },
+            engine: catalog_engine(model).to_string(),
             supports_translation: capabilities.supports_translation,
             supported_languages: capabilities.supported_languages,
             size_bytes: model.size_bytes,
@@ -805,6 +875,40 @@ mod tests {
         assert!(model_supports_language("whisper-tiny-en", "en").unwrap());
         assert!(!model_supports_language("whisper-tiny-en", "fr").unwrap());
         assert!(model_supports_translation("whisper-base-multilingual").unwrap());
+    }
+
+    #[test]
+    fn verified_gguf_families_keep_their_own_capability_boundaries() {
+        let canary = local_model_capabilities("canary-180m-flash-q8").unwrap();
+        assert!(canary.supports_translation);
+        assert!(!canary.supports_language_detection);
+        assert!(model_supports_language("canary-180m-flash-q8", "fr").unwrap());
+        assert!(!model_supports_language("canary-180m-flash-q8", "auto").unwrap());
+
+        let qwen = local_model_capabilities("qwen3-asr-0.6b-q8").unwrap();
+        assert!(!qwen.supports_translation);
+        assert!(qwen.supports_language_detection);
+        assert!(model_supports_language("qwen3-asr-0.6b-q8", "hi").unwrap());
+        assert!(model_supports_language("qwen3-asr-0.6b-q8", "auto").unwrap());
+
+        assert!(model_supports_language("sensevoice-small-q8", "ja").unwrap());
+        assert!(!model_supports_language("sensevoice-small-q8", "fr").unwrap());
+        assert!(!model_supports_language("moonshine-tiny-q8", "auto").unwrap());
+    }
+
+    #[test]
+    fn additional_gguf_artifacts_are_pinned_and_sized() {
+        for (id, revision, size_bytes) in [
+            ("canary-180m-flash-q8", "b147f9dc52b59f0998e410540a84727bd86457fd", 218_447_552),
+            ("qwen3-asr-0.6b-q8", "e4e16599b900eb0cb36e524514756bb92eb092b7", 850_423_456),
+            ("sensevoice-small-q8", "4a08b8e900b38a977e32eb08d5d0697d6e72ba04", 252_684_608),
+            ("moonshine-tiny-q8", "f5c11906eba3f44cf305eed30feb9cbfb0b4b9d0", 35_466_912),
+        ] {
+            let model = catalog_model(id).expect("catalog model");
+            assert!(model.file_name.ends_with(".gguf"));
+            assert!(model.url.contains(revision));
+            assert_eq!(model.size_bytes, size_bytes);
+        }
     }
 
     #[tokio::test]
