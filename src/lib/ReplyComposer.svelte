@@ -89,6 +89,19 @@
     let disposed = false;
     let unlisten = () => {};
     const focusTimer = setTimeout(() => contextInput?.focus(), 0);
+    // Register the selection channel before the best-effort settings lookup.
+    // `open_from_shortcut` captures text before showing this webview, so a
+    // cold-start composer must be ready to receive it without waiting on disk
+    // I/O for the privacy copy.
+    void (async () => {
+      const dispose = await listen("flick://composer-context", (event) => {
+        context = String(event.payload || "");
+        draft = "";
+        error = context ? "" : "No selected text was found. Add context manually.";
+      });
+      if (disposed) dispose();
+      else unlisten = dispose;
+    })();
     void (async () => {
       try {
         const config = await invoke("get_config");
@@ -97,13 +110,6 @@
       } catch {
         providerNotice = language === "es" ? "Tu proveedor configurado recibe el contexto solo cuando generas." : "Your configured provider receives context only when you generate.";
       }
-      const dispose = await listen("flick://composer-context", (event) => {
-        context = String(event.payload || "");
-        draft = "";
-        error = context ? "" : "No selected text was found. Add context manually.";
-      });
-      if (disposed) dispose();
-      else unlisten = dispose;
     })();
     return () => { disposed = true; unlisten(); clearTimeout(focusTimer); };
   });
