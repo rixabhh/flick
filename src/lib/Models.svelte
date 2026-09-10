@@ -74,7 +74,7 @@
       return { label: percent === null ? "Preparing download…" : `Downloading ${percent}%`, tone: "downloading" };
     }
     if (model.active) return { label: "In use · ready", tone: "ready" };
-    if (model.installed) return { label: "Ready on this Mac", tone: "ready" };
+    if (model.installed) return { label: "Ready on this computer", tone: "ready" };
     if (model.available_locally) return { label: "On disk · needs verification", tone: "attention" };
     return { label: "Not installed", tone: "muted" };
   };

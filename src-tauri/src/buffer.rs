@@ -2,7 +2,7 @@
 // Per PRD §8.1: Per-window text buffer management
 // Single global buffer, max 5000 characters, with reset conditions.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 const MAX_BUFFER_SIZE: usize = 5000;
 
@@ -25,9 +25,19 @@ impl TextBuffer {
         }
     }
 
+    /// Shortcut handling must remain available after an unrelated panic in
+    /// the hook loop. The buffer contains only transient typed characters, so
+    /// recovering its last consistent state is safer than terminating Flick.
+    fn lock(&self) -> MutexGuard<'_, BufferInner> {
+        self.inner.lock().unwrap_or_else(|poisoned| {
+            log::warn!("Recovering Flick's transient text buffer after a poisoned lock");
+            poisoned.into_inner()
+        })
+    }
+
     /// Append a character to the buffer, enforcing the max size cap.
     pub fn push_char(&self, c: char) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.lock();
         if inner.data.len() >= MAX_BUFFER_SIZE {
             // Drop oldest characters to make room
             let drain_count = inner.data.len() - MAX_BUFFER_SIZE + 1;
@@ -51,19 +61,19 @@ impl TextBuffer {
 
     /// Remove the last character (Backspace).
     pub fn pop_char(&self) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.lock();
         inner.data.pop();
     }
 
     /// Clear the entire buffer (reset conditions: Enter, Tab, Escape, Arrow, mouse click).
     pub fn clear(&self) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.lock();
         inner.data.clear();
     }
 
     /// Get the last `n` characters for trigger matching.
     pub fn get_tail(&self, n: usize) -> String {
-        let inner = self.inner.lock().unwrap();
+        let inner = self.lock();
         let chars: Vec<char> = inner.data.chars().collect();
         if chars.len() <= n {
             inner.data.clone()
@@ -74,13 +84,13 @@ impl TextBuffer {
 
     /// Get the full buffer content.
     pub fn get_full(&self) -> String {
-        let inner = self.inner.lock().unwrap();
+        let inner = self.lock();
         inner.data.clone()
     }
 
     /// Get the full buffer content, then clear it.
     pub fn take(&self) -> String {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.lock();
         let data = inner.data.clone();
         inner.data.clear();
         data
@@ -88,7 +98,7 @@ impl TextBuffer {
 
     /// Check if the buffer is empty.
     pub fn is_empty(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
+        let inner = self.lock();
         inner.data.is_empty()
     }
 }
@@ -155,5 +165,19 @@ mod tests {
         }
         let full = buf.get_full();
         assert!(full.len() <= MAX_BUFFER_SIZE);
+    }
+
+    #[test]
+    fn poisoned_buffer_remains_usable() {
+        let buffer = TextBuffer::new();
+        let inner = Arc::clone(&buffer.inner);
+        let _ = std::thread::spawn(move || {
+            let _guard = inner.lock().expect("test lock");
+            panic!("simulate a failed hook callback");
+        })
+        .join();
+
+        buffer.push_char('F');
+        assert_eq!(buffer.get_full(), "F");
     }
 }

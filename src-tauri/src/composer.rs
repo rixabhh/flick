@@ -72,19 +72,32 @@ pub async fn open_from_shortcut(app: &AppHandle) {
     // itself remains renderer-only and is deliberately not stored here. This
     // check belongs here—not only in the global hook—because CLI and tray
     // actions can enter the composer without passing through that hook.
-    let context = if current_target_is_protected(app) {
+    let (context, capture_error) = if current_target_is_protected(app) {
         remember_target(app, None);
-        let _ = app.emit(
-            "flick://error",
-            serde_json::json!({"message": "Flick will not capture text from a protected app or password field."}),
-        );
-        String::new()
+        (
+            String::new(),
+            Some("Flick will not capture text from a protected app or password field.".to_string()),
+        )
     } else {
         remember_target(app, foreground_target().ok());
-        replacer::capture_selected_text().await.unwrap_or_default()
+        match replacer::capture_selected_text().await {
+            Ok(context) => (context, None),
+            Err(error) => {
+                log::warn!("Could not capture reply context: {error}");
+                remember_target(app, None);
+                (String::new(), Some(error.to_string()))
+            }
+        }
     };
     if let Some(window) = app.get_webview_window("composer") {
-        let _ = app.emit("flick://composer-context", context);
+        // Context and the capture error stay renderer-only for this short-lived
+        // composer session. Supplying the reason lets users recover from a
+        // clipboard or selection problem without guessing why the draft opens
+        // empty.
+        let _ = app.emit(
+            "flick://composer-context",
+            serde_json::json!({"context": context, "error": capture_error}),
+        );
         let _ = window.show();
         let _ = window.set_focus();
     }

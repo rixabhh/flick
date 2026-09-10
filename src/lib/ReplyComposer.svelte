@@ -101,9 +101,15 @@
     // I/O for the privacy copy.
     void (async () => {
       const dispose = await listen("flick://composer-context", (event) => {
-        context = String(event.payload || "");
+        const payload = event.payload;
+        // Support the previous string payload while the backend and renderer
+        // update together. The object form preserves a meaningful recovery
+        // reason when selection capture could not safely complete.
+        context = typeof payload === "string" ? payload : String(payload?.context || "");
         draft = "";
-        error = context ? "" : t("composer.noSelection");
+        error = typeof payload === "object" && payload?.error
+          ? String(payload.error)
+          : context ? "" : t("composer.noSelection");
       });
       if (disposed) dispose();
       else unlisten = dispose;
