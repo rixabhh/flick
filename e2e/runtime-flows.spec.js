@@ -88,3 +88,28 @@ test("model download failures are recoverable and retry clears the error", async
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect.poll(async () => (await calls(page, "cancel_local_model_download")).length).toBe(1);
 });
+
+test("recording pill uses the session provider, not a later settings change", async ({ page }) => {
+  await mockDesktop(page, "dictation", { dictation_provider: "cloud-openai-compatible" });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await expect.poll(async () => (await calls(page, "plugin:event|listen")).length).toBe(2);
+  await emit(page, "flick://dictation-session", { state: "transcribing", provider_id: "local-whisper", app_language: "en" });
+  await emit(page, "flick://dictation-state", "transcribing");
+  await expect(page.locator(".overlay")).not.toContainText("cloud");
+  await expect(page.locator(".spinner")).toHaveCSS("animation-name", "none");
+});
+
+test("failed settings patches are visible and retained for an explicit retry", async ({ page }) => {
+  await mockDesktop(page);
+  await page.goto("/");
+  await page.getByRole("tab", { name: "Dictate", exact: true }).click();
+  await page.evaluate(() => window.__flickTest.failures.update_config_fields = "Disk is full");
+  await page.getByLabel("Floating pill position").selectOption("top-center");
+  await expect(page.getByRole("alert")).toContainText("Disk is full");
+  expect(await page.evaluate(() => window.__flickTest.config.floating_pill_position)).toBe("bottom-center");
+  await page.evaluate(() => delete window.__flickTest.failures.update_config_fields);
+  await page.getByRole("button", { name: "Retry save" }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(await page.evaluate(() => window.__flickTest.config.floating_pill_position)).toBe("top-center");
+});

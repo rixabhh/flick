@@ -375,7 +375,13 @@ fn sync_state(app: &AppHandle, config: &FlickConfig) {
         state.custom_triggers.clear_poison();
     }
     if let Some(tray) = app.try_state::<crate::tray::TrayState>() {
-        let _ = tray.0.set_checked(config.enabled);
+        let item = tray.0.clone();
+        let enabled = config.enabled;
+        // Do not wait for a main-thread menu call while holding CONFIG_LOCK:
+        // the main thread can itself be waiting to persist a tray toggle.
+        let _ = app.run_on_main_thread(move || {
+            let _ = item.set_checked(enabled);
+        });
     }
     let _ = app.emit("flick://enabled-changed", config.enabled);
 }

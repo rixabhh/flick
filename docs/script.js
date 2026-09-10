@@ -9,7 +9,8 @@ const setActiveStep = (index) => {
   stages.forEach((stage, position) => stage.classList.toggle("is-active", position === index));
 };
 
-const revealObserver = new IntersectionObserver(
+if (!reduceMotion && "IntersectionObserver" in window) {
+  const revealObserver = new IntersectionObserver(
   (entries) => entries.forEach((entry) => {
     if (entry.isIntersecting) {
       entry.target.classList.add("revealed");
@@ -18,15 +19,19 @@ const revealObserver = new IntersectionObserver(
   }),
   { threshold: 0.12, rootMargin: "0px 0px -8% 0px" },
 );
-revealTargets.forEach((target) => revealObserver.observe(target));
+  revealTargets.forEach((target) => revealObserver.observe(target));
+  document.documentElement.classList.add("motion-ready");
+}
 
-const stepObserver = new IntersectionObserver(
+if ("IntersectionObserver" in window) {
+  const stepObserver = new IntersectionObserver(
   (entries) => entries.forEach((entry) => {
     if (entry.isIntersecting) setActiveStep(Number(entry.target.dataset.step));
   }),
   { threshold: 0.56, rootMargin: "-12% 0px -22% 0px" },
 );
-steps.forEach((step) => stepObserver.observe(step));
+  steps.forEach((step) => stepObserver.observe(step));
+}
 
 const updateHeader = () => header.classList.toggle("is-scrolled", window.scrollY > 12);
 window.addEventListener("scroll", updateHeader, { passive: true });

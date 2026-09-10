@@ -12,7 +12,7 @@
 
 Flick is a local-first desktop writing assistant for Windows, macOS, and Linux. Transform text in place, dictate with a local model or an explicitly configured cloud provider, and draft thoughtful replies from an intentional text selection. Bring your own AI provider and decide where transcription runs.
 
-> **Beta status:** Stable promotion requires signed/notarized per-platform builds and native acceptance evidence. See [MARKET_READY_PLAN.md](MARKET_READY_PLAN.md) and [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
+> **Beta status:** Stable promotion requires signed/notarized per-platform builds and native acceptance evidence. macOS candidates require macOS 11 or later. See [MARKET_READY_PLAN.md](MARKET_READY_PLAN.md) and [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
 ## What Flick does
 
@@ -160,6 +160,8 @@ cargo test --manifest-path src-tauri/Cargo.toml transcribes_real_whisper_audio -
 ```
 
 CI verifies frontend, browser UI, and native targets across Windows x64/ARM64, macOS Intel/Apple Silicon, and Linux x64. GitHub-hosted macOS builds use current macOS 15 runners (`macos-15-intel` and `macos-15`) so Intel packaging does not depend on the retired macOS 13 image. Physical hardware, compositor, signing, and notarization checks remain release gates.
+
+Release packaging is separate from Verify and Pages. A manual **build-only** Release run tests the real installers without publishing. Tagged candidates are assembled as drafts only after every platform succeeds, with SHA-256 checksums. Follow the [release procedure](RELEASE_CHECKLIST.md#reproducible-build-and-draft-process); do not use `main` as a release tag.
 
 ## Project structure
 

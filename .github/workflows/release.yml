@@ -3,12 +3,53 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing v<version> tag (leave empty for a main build-only run)'
+        required: false
+        type: string
+      create_draft:
+        description: 'Create an unpublished release draft after every platform succeeds'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.metadata.outputs.sha }}
+      tag: ${{ steps.metadata.outputs.tag }}
+      create_draft: ${{ steps.metadata.outputs.create_draft }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+      - id: metadata
+        name: Validate source, versions and release intent
+        env:
+          RELEASE_TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
+          CREATE_RELEASE: ${{ github.event_name == 'push' || inputs.create_draft == true }}
+        run: node scripts/validate-release.mjs --check
+
   browser-smoke:
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.validate.outputs.sha }}
       - uses: actions/setup-node@v5
         with:
           node-version: 20
@@ -20,9 +61,7 @@ jobs:
       - run: npm run test:e2e
 
   build:
-    needs: browser-smoke
-    permissions:
-      contents: write
+    needs: [validate, browser-smoke]
     strategy:
       fail-fast: false
       matrix:
@@ -37,7 +76,7 @@ jobs:
           # supported GitHub-hosted runner.
           - os: macos-15-intel
             target: x86_64-apple-darwin
-            macos_deployment_target: '10.15'
+            macos_deployment_target: '11.0'
           - os: macos-15
             target: aarch64-apple-darwin
             macos_deployment_target: '11.0'
@@ -46,6 +85,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.validate.outputs.sha }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -64,7 +105,9 @@ jobs:
         run: |
           $installer = Join-Path $env:RUNNER_TEMP 'LLVM-23.1.0-woa64.msi'
           Invoke-WebRequest -Uri 'https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.0/LLVM-23.1.0-woa64.msi' -OutFile $installer
-          Start-Process msiexec.exe -ArgumentList @('/i', $installer, '/qn', '/norestart') -Wait -NoNewWindow
+          $install = Start-Process msiexec.exe -ArgumentList @('/i', $installer, '/qn', '/norestart') -Wait -PassThru -WindowStyle Hidden
+          if ($install.ExitCode -notin @(0, 3010)) { throw "LLVM installer failed: $($install.ExitCode)" }
+          if (-not (Test-Path -LiteralPath 'C:\Program Files\LLVM\bin\libclang.dll')) { throw 'LLVM installation did not supply libclang.dll' }
           "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           # whisper.cpp requires clang rather than MSVC for Windows ARM64.
           "CC=clang-cl" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
@@ -117,27 +160,64 @@ jobs:
           npm run build
 
       - name: Verify native code
-        run: cargo test --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }}
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }}
 
-      - uses: tauri-apps/tauri-action@v0
+      # Package without publishing. Only the final job can create a draft,
+      # after all five independent installer builds and tests have succeeded.
+      - name: Build installers
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FLICK_BUILD_TARGET: ${{ matrix.target }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node scripts/build-release.mjs
+
+      - name: Collect installers and SHA-256 checksums
+        env:
+          FLICK_BUILD_TARGET: ${{ matrix.target }}
+        run: node scripts/collect-release-artifacts.mjs
+
+      - uses: actions/upload-artifact@v4
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Flick ${{ github.ref_name }}'
-          releaseBody: |
-            ## Install Flick
+          name: installers-${{ matrix.target }}
+          path: release-artifacts/
+          if-no-files-found: error
+          retention-days: 14
 
-            Choose the installer that matches your computer:
-
-            - **Windows x64**: Intel or AMD PCs (most Windows computers)
-            - **Windows arm64**: Snapdragon / Windows on ARM PCs
-            - **macOS Apple Silicon**: M-series Macs
-            - **macOS Intel**: Intel-based Macs
-            - **Linux x64**: Debian package for Intel/AMD Linux desktops
-
-            An x64 MSI cannot install on Windows ARM. If Windows shows a
-            processor-type message, download the asset labelled `arm64`.
-          releaseDraft: true
-          prerelease: true
-          args: --target ${{ matrix.target }}
+  draft:
+    needs: [validate, build]
+    if: needs.validate.outputs.create_draft == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.validate.outputs.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: installers-*
+          path: release-artifacts
+          merge-multiple: true
+      - name: Assemble the unpublished release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' assets < <(find release-artifacts -type f -print0)
+          test "${#assets[@]}" -gt 5
+          existing=$(gh release view "$RELEASE_TAG" --json isDraft -q '.isDraft' 2>/dev/null || true)
+          if [ "$existing" = 'false' ]; then
+            echo 'Refusing to overwrite an already published release.' >&2
+            exit 1
+          fi
+          if [ "$existing" = 'true' ]; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --draft --prerelease --title "Flick $RELEASE_TAG" --notes-file RELEASE_NOTES.md
+          fi

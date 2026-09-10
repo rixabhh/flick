@@ -9,7 +9,7 @@ export default defineConfig(async () => ({
     // Playwright owns browser specs under e2e/. Keeping the unit runner scoped
     // to source tests prevents both runners from trying to execute the same
     // conventionally named file.
-    include: ["src/**/*.test.{js,ts}"],
+    include: ["src/**/*.test.{js,ts}", "scripts/**/*.test.js"],
   },
   clearScreen: false,
   server: {

@@ -22,6 +22,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: node scripts/validate-release.mjs --check
       - run: npm test
       - run: npm run build
       - run: npx playwright install --with-deps chromium
@@ -42,7 +43,7 @@ jobs:
           # runner and prevents release verification from remaining queued.
           - os: macos-15-intel
             target: x86_64-apple-darwin
-            macos_deployment_target: '10.15'
+            macos_deployment_target: '11.0'
             check_only: false
           # macos-15 is the current stable Apple Silicon image. Flick avoids
           # the former AppKit binding dependency on both macOS architectures.
@@ -95,6 +96,6 @@ jobs:
           echo "MACOSX_DEPLOYMENT_TARGET=${{ matrix.macos_deployment_target }}" >> "$GITHUB_ENV"
           echo "CMAKE_OSX_DEPLOYMENT_TARGET=${{ matrix.macos_deployment_target }}" >> "$GITHUB_ENV"
       - if: matrix.check_only
-        run: cargo check --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }}
+        run: cargo check --locked --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }}
       - if: ${{ !matrix.check_only }}
-        run: cargo test --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }}
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }}

@@ -7,6 +7,27 @@ in the order that reduces user-facing risk first.
 
 ## Current baseline — September 2026
 
+The finalization pass is limited to **at most three commits**, on `main`.
+Runtime fixes are consolidated in `392342c`, with regression coverage for the
+clipboard, download, settings, provider-key and reply-session races. Release
+hardening is the second batch; the third is reserved for validation-driven
+corrections. No speculative redesign or additional model-engine migration is
+part of this final pass.
+
+The latest confirmed release failure was packaging-specific: Tauri injected
+`-mmacosx-version-min=10.13` while the workflow's native tests used 10.15/11.0.
+The C++ speech engine requires newer filesystem APIs. The bundle now explicitly
+uses 11.0, matching verification and packaging. Manual release runs no longer
+turn `main` into a release tag. See the reproducible release procedure and
+candidate limitations in [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
+
+Remaining acceptance evidence is explicit, not an invitation to unlimited
+cosmetic changes: signed/notarized installers, real microphone and native
+paste-back tests, actual inference for every advertised model family, and
+target-desktop testing. Clipboard snapshots currently preserve text or images,
+not all rich clipboard representations; unsupported nontext clipboard capture
+is refused, and Linux's empty-versus-unsupported ambiguity remains a boundary.
+
 | Area | State | Evidence / boundary |
 | --- | --- | --- |
 | Desktop targets | Automated verification | Windows x64/ARM64, macOS Intel/Apple Silicon, and Linux x64 build and test in `Verify`. |
