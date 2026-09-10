@@ -40,18 +40,54 @@ fn provider_error_message(body_text: &str) -> String {
         .unwrap_or_else(|| body_text.trim().to_string())
 }
 
-fn first_text_from_openrouter_content(content: &Value) -> Option<&str> {
-    content.as_str().or_else(|| {
-        content.as_array().and_then(|parts| {
-            parts.iter().find_map(|part| {
-                part.as_str().or_else(|| {
-                    part.get("text")
-                        .and_then(|v| v.as_str())
-                        .or_else(|| part.get("content").and_then(|v| v.as_str()))
-                })
+fn complete_text(content: &Value) -> Result<String> {
+    let text = if let Some(text) = content.as_str() {
+        text.to_string()
+    } else if let Some(parts) = content.as_array() {
+        parts
+            .iter()
+            .filter(|part| part.get("thought").and_then(Value::as_bool) != Some(true))
+            .filter_map(|part| {
+                part.as_str()
+                    .or_else(|| part.get("text").and_then(Value::as_str))
             })
-        })
-    })
+            .collect::<String>()
+    } else {
+        String::new()
+    };
+    anyhow::ensure!(
+        !text.trim().is_empty(),
+        "Provider returned no usable text. Your original text was not replaced."
+    );
+    Ok(text.trim().to_string())
+}
+
+fn chat_response(body: &Value) -> Result<String> {
+    let choice = body
+        .get("choices")
+        .and_then(|choices| choices.get(0))
+        .context("Provider returned no choices")?;
+    if let Some(reason) = choice.get("finish_reason").and_then(Value::as_str) {
+        anyhow::ensure!(
+            reason == "stop",
+            "Provider did not finish the text ({reason}). Your original text was not replaced."
+        );
+    }
+    complete_text(&choice["message"]["content"])
+}
+
+fn gemini_response(body: &Value) -> Result<String> {
+    let candidate = body
+        .get("candidates")
+        .and_then(|items| items.get(0))
+        .context("Gemini returned no candidates")?;
+    if let Some(reason) = candidate.get("finishReason").and_then(Value::as_str) {
+        anyhow::ensure!(
+            reason == "STOP",
+            "Gemini did not finish the text ({reason}). Your original text was not replaced."
+        );
+    }
+    complete_text(&candidate["content"]["parts"])
 }
 
 /// Built-in prompt instructions - per PRD §9.
@@ -135,6 +171,7 @@ pub async fn transform_openai_compatible(
     let response = request
         .send()
         .await
+        .map_err(reqwest::Error::without_url)
         .context("Custom provider API request failed")?;
     if !response.status().is_success() {
         let status = response.status();
@@ -149,13 +186,7 @@ pub async fn transform_openai_compatible(
         .json()
         .await
         .context("Failed to parse custom provider response")?;
-    body.get("choices")
-        .and_then(|c| c.get(0))
-        .and_then(|c| c.get("message"))
-        .and_then(|m| m.get("content"))
-        .and_then(first_text_from_openrouter_content)
-        .map(|text| text.trim().to_string())
-        .context("Unexpected custom provider response structure")
+    chat_response(&body)
 }
 
 /// Send a text transformation request using the selected provider/model.
@@ -197,21 +228,10 @@ pub async fn transform_text(
                 .await
                 .context("Failed to parse OpenRouter response JSON")?;
 
-            let text = response_json
-                .get("choices")
-                .and_then(|c| c.get(0))
-                .and_then(|c| c.get("message"))
-                .and_then(|m| m.get("content"))
-                .and_then(first_text_from_openrouter_content)
-                .context("Unexpected OpenRouter response structure")?;
-
-            Ok(text.trim().to_string())
+            chat_response(&response_json)
         }
-        _ => {
-            let url = format!(
-                "{}/{}:generateContent?key={}",
-                GEMINI_BASE_URL, model, api_key
-            );
+        "gemini" => {
+            let url = format!("{}/{}:generateContent", GEMINI_BASE_URL, model);
 
             let body = json!({
                 "contents": [{
@@ -227,9 +247,11 @@ pub async fn transform_text(
 
             let response = HTTP_CLIENT
                 .post(&url)
+                .header("x-goog-api-key", api_key)
                 .json(&body)
                 .send()
                 .await
+                .map_err(reqwest::Error::without_url)
                 .context("Gemini API request failed")?;
 
             if !response.status().is_success() {
@@ -244,18 +266,9 @@ pub async fn transform_text(
                 .await
                 .context("Failed to parse Gemini response JSON")?;
 
-            let text = response_json
-                .get("candidates")
-                .and_then(|c| c.get(0))
-                .and_then(|c| c.get("content"))
-                .and_then(|c| c.get("parts"))
-                .and_then(|p| p.get(0))
-                .and_then(|p| p.get("text"))
-                .and_then(|t| t.as_str())
-                .context("Unexpected Gemini response structure")?;
-
-            Ok(text.trim().to_string())
+            gemini_response(&response_json)
         }
+        _ => bail!("Unknown text provider. Choose a provider in Settings before retrying."),
     }
 }
 
@@ -284,6 +297,24 @@ pub async fn test_connection(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rejects_empty_truncated_and_filtered_output_before_replacement() {
+        for body in [
+            json!({"choices": [{"finish_reason": "length", "message": {"content": "Cut off"}}]}),
+            json!({"choices": [{"finish_reason": "content_filter", "message": {"content": "Filtered"}}]}),
+            json!({"choices": [{"finish_reason": "stop", "message": {"content": "  "}}]}),
+        ] {
+            assert!(chat_response(&body).is_err());
+        }
+        assert!(gemini_response(&json!({"candidates": [{"finishReason": "MAX_TOKENS", "content": {"parts": [{"text": "Cut off"}]}}]})).is_err());
+    }
+
+    #[test]
+    fn joins_all_text_parts_without_exposing_reasoning() {
+        assert_eq!(chat_response(&json!({"choices": [{"finish_reason": "stop", "message": {"content": [{"text": "Hello "}, {"text": "world"}]}}]})).unwrap(), "Hello world");
+        assert_eq!(gemini_response(&json!({"candidates": [{"finishReason": "STOP", "content": {"parts": [{"thought": true, "text": "Internal"}, {"text": "Final "}, {"text": "answer"}]}}]})).unwrap(), "Final answer");
+    }
 
     #[test]
     fn test_get_prompt_fix() {

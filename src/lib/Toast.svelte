@@ -25,6 +25,7 @@
     const unlisten2 = listen("flick://done", () => {
       clearTimers();
       state = "done";
+      showWindow();
       fadeTimer = setTimeout(() => {
         state = "idle";
         hideWindow();
@@ -35,6 +36,7 @@
       clearTimers();
       state = "error";
       errorMessage = event.payload?.message || "Something went wrong";
+      showWindow();
       fadeTimer = setTimeout(() => {
         state = "idle";
         hideWindow();

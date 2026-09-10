@@ -1,7 +1,6 @@
 //! Private, local-only activity history.
 
 use anyhow::{Context, Result};
-use arboard::Clipboard;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use std::sync::Mutex;
@@ -51,6 +50,7 @@ fn connection(app: &AppHandle) -> Result<Connection> {
     std::fs::create_dir_all(&directory).context("Failed to create application data directory")?;
     let connection = Connection::open(directory.join("history.sqlite3"))
         .context("Failed to open local history")?;
+    connection.busy_timeout(std::time::Duration::from_secs(3))?;
     connection.execute_batch("CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY, created_at INTEGER NOT NULL, kind TEXT NOT NULL, text TEXT NOT NULL, saved INTEGER NOT NULL DEFAULT 0);")?;
     Ok(connection)
 }
@@ -116,10 +116,10 @@ pub fn copy_last_result(app: &AppHandle) -> Result<bool> {
         Some(text) => Some(text),
         None => latest_text(app)?,
     };
-    let Some(text) = text else { return Ok(false); };
-    Clipboard::new()
-        .and_then(|mut clipboard| clipboard.set_text(text))
-        .context("Could not write the clipboard")?;
+    let Some(text) = text else {
+        return Ok(false);
+    };
+    crate::replacer::copy_text_to_clipboard(&text)?;
     Ok(true)
 }
 
@@ -135,8 +135,7 @@ pub fn copy_history_entry(app: AppHandle, id: i64) -> Result<(), String> {
         .optional()
         .map_err(|error| error.to_string())?
         .ok_or_else(|| "History entry no longer exists.".to_string())?;
-    Clipboard::new()
-        .and_then(|mut clipboard| clipboard.set_text(text))
+    crate::replacer::copy_text_to_clipboard(&text)
         .map_err(|error| format!("Could not write the clipboard: {error}"))
 }
 
@@ -189,6 +188,12 @@ pub fn clear_history(app: AppHandle) -> Result<(), String> {
     connection
         .execute("DELETE FROM history", [])
         .map_err(|error| error.to_string())?;
+    if let Some(state) = app.try_state::<RecentResultState>() {
+        *state
+            .latest
+            .lock()
+            .map_err(|_| "Could not clear the recent-result memory. Restart Flick.")? = None;
+    }
     Ok(())
 }
 

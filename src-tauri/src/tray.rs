@@ -8,10 +8,16 @@ use tauri::{
     AppHandle, Emitter, Manager,
 };
 
+pub struct TrayState(pub tauri::menu::CheckMenuItem<tauri::Wry>);
+
 /// Set up the system tray icon and menu - per §8.6.
 pub fn setup_tray(app: &AppHandle) -> Result<()> {
     let enabled_item = CheckMenuItemBuilder::with_id("enabled", "Enabled")
-        .checked(true)
+        .checked(
+            crate::config::load_config(app)
+                .map(|cfg| cfg.enabled)
+                .unwrap_or(false),
+        )
         .build(app)
         .map_err(|e| anyhow::anyhow!("Failed to create enabled menu item: {}", e))?;
 
@@ -39,6 +45,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<()> {
         .item(&quit_item)
         .build()
         .map_err(|e| anyhow::anyhow!("Failed to build tray menu: {}", e))?;
+    app.manage(TrayState(enabled_item));
 
     let tray = app.tray_by_id("flick-tray");
     if let Some(tray) = tray {
@@ -74,27 +81,17 @@ pub fn setup_tray(app: &AppHandle) -> Result<()> {
 
 /// Handle the "Enabled" toggle from the tray menu.
 fn handle_toggle_enabled(app: &AppHandle) {
-    if let Some(state) = app.try_state::<crate::AppState>() {
-        let Ok(mut enabled) = state.enabled.lock() else {
-            // Keep the menu event recoverable. The persisted configuration is
-            // untouched and Flick stays open so the user can retry or restart.
-            log::warn!("Could not toggle Flick because the enabled-state lock is unavailable");
-            return;
-        };
-        *enabled = !*enabled;
-        let new_val = *enabled;
-        drop(enabled);
-
-        // Persist the change
-        if let Ok(mut cfg) = crate::config::load_config(app) {
-            cfg.enabled = new_val;
-            let _ = crate::config::save_config(app, &cfg);
+    match crate::config::update_config(app, |cfg| {
+        cfg.enabled = !cfg.enabled;
+        Ok(())
+    }) {
+        Ok(cfg) => {
+            let _ = app.emit("flick://enabled-changed", cfg.enabled);
         }
-
-        log::info!(
-            "Flick {} via tray",
-            if new_val { "enabled" } else { "disabled" }
-        );
+        Err(error) => {
+            log::warn!("Could not save enabled state: {error}");
+            let _ = app.emit("flick://error", serde_json::json!({"message": format!("Could not change Flick's enabled state: {error}")}));
+        }
     }
 }
 

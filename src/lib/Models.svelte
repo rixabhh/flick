@@ -8,9 +8,19 @@
   let verifying = $state("");
   let progress = $state({});
   let error = $state("");
+  let discoveryError = $state("");
+  let watcherError = $state("");
   let loading = $state(true);
+  let removing = $state("");
+  let cancelling = $state("");
+  let refreshRequest = 0;
+  let downloadRevision = 0;
+  let disposed = false;
+  const busy = () => loading || Boolean(verifying) || Boolean(removing);
 
   async function refresh() {
+    const request = ++refreshRequest;
+    const observedDownload = downloadRevision;
     loading = true;
     try {
       const [availableModels, activeDownload] = await Promise.all([
@@ -18,41 +28,56 @@
         // Download recovery is helpful, but it must never make the model
         // library itself unavailable if the process is still registering its
         // downloader state during app startup.
-        invoke("active_local_model_download").catch(() => null),
+        invoke("active_local_model_download").then((id) => ({ id })).catch(() => null),
       ]);
+      if (disposed || request !== refreshRequest) return;
       models = availableModels;
-      downloading = activeDownload || "";
+      discoveryError = "";
+      // A download event is newer than the snapshot requested above. Never
+      // resurrect a finished transfer or hide one that started during I/O.
+      if (observedDownload === downloadRevision && activeDownload) downloading = activeDownload.id || "";
     }
-    catch (message) { error = `Couldn't load your local models. Nothing was changed. ${String(message)}`; }
-    finally { loading = false; }
+    catch (message) { if (!disposed && request === refreshRequest) discoveryError = `Couldn't load your local models. Nothing was changed. ${String(message)}`; }
+    finally { if (!disposed && request === refreshRequest) loading = false; }
   }
   async function download(id) {
-    if (downloading && downloading !== id) {
+    if (busy()) return;
+    if (downloading) {
       error = "A model download is already in progress. Wait for it to finish or cancel it before starting another.";
       return;
     }
+    const revision = ++downloadRevision;
     downloading = id; error = "";
+    delete progress[id];
     try { await invoke("download_local_model", { id }); }
     catch (message) {
-      if (downloading === id) downloading = "";
+      if (disposed || revision !== downloadRevision) return;
+      downloading = "";
       error = `Download didn't start. Your existing model is safe. ${String(message)}`;
     }
   }
   async function remove(id) {
+    if (busy() || downloading) return;
     error = "";
+    removing = id;
     try { await invoke("delete_local_model", { id }); await refresh(); }
-    catch (message) { error = `Couldn't remove that model. ${String(message)}`; }
+    catch (message) { if (!disposed) error = `Couldn't remove that model. ${String(message)}`; }
+    finally { removing = ""; }
   }
   async function select(id) {
+    if (busy() || downloading) return;
     error = "";
     verifying = id;
     try { await invoke("set_active_local_model", { id }); await refresh(); }
-    catch (message) { error = `Verification didn't finish, so Flick won't use this model. ${String(message)}`; }
+    catch (message) { if (!disposed) error = `Verification didn't finish, so Flick won't use this model. ${String(message)}`; }
     finally { if (verifying === id) verifying = ""; }
   }
   async function cancel(id) {
+    if (cancelling || downloading !== id) return;
+    cancelling = id;
+    error = "";
     try { await invoke("cancel_local_model_download", { id }); }
-    catch (message) { error = String(message); }
+    catch (message) { if (!disposed) { error = String(message); cancelling = ""; } }
   }
   const size = (bytes) => `${(bytes / 1024 / 1024).toFixed(0)} MB`;
   const languageBadge = (model) => {
@@ -80,28 +105,33 @@
   };
   onMount(() => {
     let unlisten;
-    let disposed = false;
     void (async () => {
       try {
         const dispose = await listen("flick://model-download", ({ payload }) => {
           if (!payload?.id) return;
+          downloadRevision += 1;
           if (payload.state === "complete") {
-            downloading = "";
+            if (downloading === payload.id) downloading = "";
+            if (cancelling === payload.id) cancelling = "";
             delete progress[payload.id];
             void refresh();
             return;
           }
           if (payload.state === "failed") {
-            downloading = "";
+            if (downloading === payload.id) downloading = "";
+            if (cancelling === payload.id) cancelling = "";
+            delete progress[payload.id];
             error = `Download didn't finish. Your existing model is safe. ${payload.message || "Please try again."}`;
             return;
           }
+          downloading = payload.id;
+          if (payload.state === "started") delete progress[payload.id];
           if (payload.received !== undefined) progress[payload.id] = payload;
         });
         if (disposed) dispose();
         else unlisten = dispose;
       } catch (message) {
-        error = `Couldn't watch model downloads. ${String(message)}`;
+        watcherError = `Couldn't watch model downloads. ${String(message)}`;
       } finally {
         if (!disposed) void refresh();
       }
@@ -112,18 +142,18 @@
 
 <section class="models">
   <div class="heading"><div><h2>Speech models</h2><p>Pick one model to dictate without an internet connection. Flick verifies every download before it can be used. {models.some((model) => model.installed) ? `${size(installedSize())} ready on this computer.` : "Start with Tiny English for the fastest setup."}</p></div><button onclick={refresh} disabled={loading}>{loading ? "Checking…" : "Refresh"}</button></div>
-  {#if error}<p class="error">{error}</p>{/if}
+  {#if discoveryError || error || watcherError}<p class="error" role="alert">{discoveryError || error || watcherError}</p>{/if}
   {#if loading}<div class="loading" aria-live="polite">Checking what is already on this computer…</div>{/if}
   {#each models as model}
     {@const status = readiness(model)}
     <article>
       <div><strong>{model.name}</strong><p>{model.description}</p><span>{model.engine} · {model.language} · {size(model.size_bytes)}</span><div class="capabilities"><span class="capability local">On device</span><span class="capability">{languageBadge(model)}</span>{#if model.supports_language_detection}<span class="capability detection">Auto-detect</span>{/if}{#if model.supports_translation}<span class="capability translation">English translation</span>{:else}<span class="capability muted">Transcription only</span>{/if}</div><span class:ready={status.tone === "ready"} class:attention={status.tone === "attention"} class:downloading={status.tone === "downloading" || status.tone === "verifying"} class="model-status" role="status">{status.label}</span></div>
       {#if model.installed}
-        {#if model.active}<span class="active">In use</span>{:else}<div class="actions"><button onclick={() => select(model.id)} disabled={Boolean(verifying)}>{verifying === model.id ? "Verifying…" : "Use"}</button><button class="remove" onclick={() => remove(model.id)} disabled={Boolean(verifying)}>Remove</button></div>{/if}
+        {#if model.active}<span class="active">In use</span>{:else}<div class="actions"><button onclick={() => select(model.id)} disabled={busy() || Boolean(downloading)}>{verifying === model.id ? "Verifying…" : "Use"}</button><button class="remove" onclick={() => remove(model.id)} disabled={busy() || Boolean(downloading)}>{removing === model.id ? "Removing…" : "Remove"}</button></div>{/if}
       {:else if model.available_locally}
-        <div class="actions"><button onclick={() => select(model.id)} disabled={Boolean(verifying)}>{verifying === model.id ? "Verifying…" : "Verify & use"}</button><button class="remove" onclick={() => remove(model.id)} disabled={Boolean(verifying)}>Remove</button></div>
+        <div class="actions"><button onclick={() => select(model.id)} disabled={busy() || Boolean(downloading)}>{verifying === model.id ? "Verifying…" : "Verify & use"}</button><button class="remove" onclick={() => remove(model.id)} disabled={busy() || Boolean(downloading)}>{removing === model.id ? "Removing…" : "Remove"}</button></div>
       {:else}
-        {#if downloading === model.id}<button class="remove" onclick={() => cancel(model.id)}>Cancel</button>{:else}<button class="download" onclick={() => download(model.id)} disabled={Boolean(downloading) || Boolean(verifying)}>Download</button>{/if}
+        {#if downloading === model.id}<button class="remove" onclick={() => cancel(model.id)} disabled={Boolean(cancelling)}>{cancelling === model.id ? "Cancelling…" : "Cancel"}</button>{:else}<button class="download" onclick={() => download(model.id)} disabled={Boolean(downloading) || busy()}>Download</button>{/if}
       {/if}
       {#if progress[model.id] && downloading === model.id}<progress value={progress[model.id].received} max={progress[model.id].total} aria-label={`Downloading ${model.name}`} aria-valuetext={`${downloadPercent(model) ?? 0}% downloaded`}></progress>{/if}
     </article>

@@ -5,8 +5,8 @@
 // - Starts keyboard hook on background thread
 // - Runs trigger detection + replacement pipeline
 
-pub mod ai_client;
 pub mod active_target;
+pub mod ai_client;
 pub mod buffer;
 pub mod commands;
 pub mod composer;
@@ -60,6 +60,7 @@ pub fn run() {
             commands::test_api_connection,
             commands::get_config,
             commands::save_config,
+            commands::update_config_fields,
             commands::apply_floating_pill_position,
             commands::toggle_enabled,
             commands::add_custom_command,
@@ -97,7 +98,15 @@ pub fn run() {
             let app_handle = app.handle().clone();
 
             // Load config
-            let cfg = config::load_config(&app_handle).unwrap_or_else(|_| FlickConfig::default());
+            let cfg = config::load_config(&app_handle).unwrap_or_else(|error| {
+                log::error!(
+                    "Settings could not be loaded; background features are disabled: {error}"
+                );
+                FlickConfig {
+                    enabled: false,
+                    ..FlickConfig::default()
+                }
+            });
 
             let custom_triggers = config::get_custom_trigger_names(&cfg);
 
@@ -305,9 +314,8 @@ fn run_hook_loop(app: AppHandle) {
                     text_buffer.clear();
 
                     // Get config values needed for runtime behavior
-                    let (show_done_toast, provider, model, custom_base_url) = app
-                        .try_state::<AppState>()
-                        .and_then(|s| {
+                    let Some((show_done_toast, provider, model, custom_base_url)) =
+                        app.try_state::<AppState>().and_then(|s| {
                             s.config.lock().ok().map(|cfg| {
                                 (
                                     cfg.show_done_toast,
@@ -317,12 +325,10 @@ fn run_hook_loop(app: AppHandle) {
                                 )
                             })
                         })
-                        .unwrap_or((
-                            true,
-                            "gemini".to_string(),
-                            "gemini-2.5-flash-lite".to_string(),
-                            String::new(),
-                        ));
+                    else {
+                        let _ = app.emit("flick://error", serde_json::json!({"message": "Flick could not read your provider settings. No text was sent. Restart Flick and try again."}));
+                        continue;
+                    };
 
                     // Self-hosted OpenAI-compatible servers can deliberately run
                     // without authentication. Cloud providers still require a key.
@@ -525,52 +531,37 @@ fn begin_dictation(app: &AppHandle) {
 }
 
 async fn finish_dictation(app: &AppHandle) {
-    match dictation::stop_and_transcribe(app).await {
-        Ok(text) => {
-            let text = maybe_cleanup_dictation(app, text).await;
+    match dictation::stop_and_transcribe_session(app).await {
+        Ok(result) => {
+            let settings = result.settings;
+            let text = maybe_cleanup_dictation(&settings, result.text).await;
             history::remember_result(app, &text);
-            let _ = history::record(app, "dictation", &text);
-            let append_space = app
-                .try_state::<AppState>()
-                .and_then(|state| {
-                    state
-                        .config
-                        .lock()
-                        .ok()
-                        .map(|config| config.append_trailing_space)
-                })
-                .unwrap_or(false);
-            let output = if append_space {
+            if settings.history_enabled {
+                let _ = history::record(app, "dictation", &text);
+            }
+            let output = if settings.append_trailing_space {
                 format!("{} ", text)
             } else {
                 text
             };
-            let disabled_apps = app
+            let current_config = app
                 .try_state::<AppState>()
-                .and_then(|state| {
-                    state
-                        .config
-                        .lock()
-                        .ok()
-                        .map(|config| config.disabled_apps.clone())
+                .and_then(|state| state.config.lock().ok().map(|config| config.clone()));
+            let target_changed =
+                !dictation::captured_target_is_still_appropriate(result.target.as_ref());
+            let protected_target = current_config
+                .as_ref()
+                .map(|config| {
+                    !config.enabled || key_hook::active_app_is_protected(&config.disabled_apps)
                 })
-                .unwrap_or_default();
-            let target_changed = !dictation::target_is_still_appropriate(app);
-            let protected_target = key_hook::active_app_is_protected(&disabled_apps);
+                .unwrap_or(true);
             if target_changed || protected_target {
-                let copied = arboard::Clipboard::new()
-                    .and_then(|mut clipboard| clipboard.set_text(output.clone()))
-                    .is_ok();
                 let reason = if protected_target {
                     "Dictation target is protected"
                 } else {
                     "Dictation target changed"
                 };
-                let message = if copied {
-                    format!("{reason}. The transcript was copied instead of pasted.")
-                } else {
-                    format!("{reason}. Flick did not paste into that target.")
-                };
+                let message = format!("{reason}. Nothing was pasted. Use Copy last result to recover your transcript.");
                 let _ = app.emit("flick://error", serde_json::json!({"message": message}));
                 return;
             }
@@ -580,17 +571,12 @@ async fn finish_dictation(app: &AppHandle) {
                     serde_json::json!({"message": error.to_string()}),
                 );
             } else {
-                let auto_submit_apps = app
-                    .try_state::<AppState>()
-                    .and_then(|state| {
-                        state
-                            .config
-                            .lock()
-                            .ok()
-                            .map(|config| config.auto_submit_apps.clone())
-                    })
-                    .unwrap_or_default();
-                if key_hook::active_app_matches(&auto_submit_apps) {
+                if dictation::captured_target_is_still_appropriate(result.target.as_ref())
+                    && key_hook::active_app_matches(&settings.auto_submit_apps)
+                    && current_config
+                        .as_ref()
+                        .is_some_and(|cfg| key_hook::active_app_matches(&cfg.auto_submit_apps))
+                {
                     if let Err(error) = replacer::submit_current_target().await {
                         let _ = app.emit(
                             "flick://error",
@@ -612,24 +598,13 @@ async fn finish_dictation(app: &AppHandle) {
 /// Keep the primary dictation path local by default. When the user explicitly
 /// opts in, only the final transcript is sent to their selected provider for
 /// cleanup; a provider error must never discard or block the local result.
-async fn maybe_cleanup_dictation(app: &AppHandle, text: String) -> String {
-    let Some((enabled, provider, model, custom_base_url)) =
-        app.try_state::<AppState>().and_then(|state| {
-            state.config.lock().ok().map(|config| {
-                (
-                    config.dictation_llm_post_process,
-                    config.provider.clone(),
-                    config.model.clone(),
-                    config.custom_base_url.clone(),
-                )
-            })
-        })
-    else {
-        return text;
-    };
-    if !enabled {
+async fn maybe_cleanup_dictation(config: &FlickConfig, text: String) -> String {
+    if !config.dictation_llm_post_process {
         return text;
     }
+    let provider = &config.provider;
+    let model = &config.model;
+    let custom_base_url = &config.custom_base_url;
     let api_key = if provider == "custom" {
         keychain::load_api_key(&provider).unwrap_or_default()
     } else {

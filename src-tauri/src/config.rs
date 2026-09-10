@@ -4,10 +4,13 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
-use tauri::{AppHandle, Manager};
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use tauri::{AppHandle, Emitter, Manager};
 
 const CONFIG_FILENAME: &str = "config.json";
+static CONFIG_LOCK: Mutex<()> = Mutex::new(());
 
 /// A user-defined custom command - per §8.5.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -240,20 +243,28 @@ fn config_path(app: &AppHandle) -> Result<PathBuf> {
 
 /// Load configuration from disk. Returns default config if file doesn't exist.
 pub fn load_config(app: &AppHandle) -> Result<FlickConfig> {
-    let path = config_path(app)?;
+    let _guard = CONFIG_LOCK
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Settings storage is unavailable. Restart Flick."))?;
+    load_at(&config_path(app)?)
+}
+
+fn load_at(path: &Path) -> Result<FlickConfig> {
     if !path.exists() {
         let default = FlickConfig::default();
-        save_config(app, &default)?;
+        save_at(path, &default)?;
         return Ok(default);
     }
     let contents = fs::read_to_string(&path).context("Failed to read config file")?;
-    let config: FlickConfig = serde_json::from_str(&contents).unwrap_or_else(|_| {
-        log::warn!("Config file corrupted, using defaults");
-        FlickConfig::default()
-    });
+    let config: FlickConfig = serde_json::from_str(&contents)
+        .context("Settings file is invalid. It has been preserved; restore a valid config.json before saving.")?;
+    anyhow::ensure!(
+        config.version <= 5,
+        "Settings were created by a newer Flick version; upgrade Flick before saving."
+    );
     let (config, migrated) = migrate_config(config);
     if migrated {
-        save_config(app, &config)?;
+        save_at(path, &config)?;
     }
     Ok(config)
 }
@@ -296,10 +307,100 @@ fn migrate_config(mut config: FlickConfig) -> (FlickConfig, bool) {
 
 /// Save configuration to disk.
 pub fn save_config(app: &AppHandle, config: &FlickConfig) -> Result<()> {
+    let _guard = CONFIG_LOCK
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Settings storage is unavailable. Restart Flick."))?;
     let path = config_path(app)?;
-    let json = serde_json::to_string_pretty(config).context("Failed to serialize config")?;
-    fs::write(&path, json).context("Failed to write config file")?;
+    // Never overwrite unreadable or future-version settings with defaults.
+    if path.exists() {
+        load_at(&path)?;
+    }
+    save_at(&path, config)?;
+    sync_state(app, config);
     Ok(())
+}
+
+/// All read/modify/write operations share this transaction, including model
+/// metadata, settings, custom commands and the tray toggle.
+pub fn update_config(
+    app: &AppHandle,
+    update: impl FnOnce(&mut FlickConfig) -> Result<()>,
+) -> Result<FlickConfig> {
+    let _guard = CONFIG_LOCK
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Settings storage is unavailable. Restart Flick."))?;
+    let path = config_path(app)?;
+    let mut config = load_at(&path)?;
+    update(&mut config)?;
+    save_at(&path, &config)?;
+    sync_state(app, &config);
+    Ok(config)
+}
+
+pub fn merge_fields(config: &FlickConfig, patch: serde_json::Value) -> Result<FlickConfig> {
+    let patch = patch
+        .as_object()
+        .context("Settings patch must be an object")?;
+    let mut value = serde_json::to_value(config)?;
+    let object = value
+        .as_object_mut()
+        .context("Invalid settings structure")?;
+    for (key, value) in patch {
+        anyhow::ensure!(object.contains_key(key), "Unknown setting: {key}");
+        anyhow::ensure!(
+            !matches!(key.as_str(), "version" | "local_models" | "custom_commands"),
+            "Setting {key} is managed separately"
+        );
+        object.insert(key.clone(), value.clone());
+    }
+    serde_json::from_value(value).context("Invalid setting value")
+}
+
+fn sync_state(app: &AppHandle, config: &FlickConfig) {
+    if let Some(state) = app.try_state::<crate::AppState>() {
+        *state
+            .config
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = config.clone();
+        state.config.clear_poison();
+        *state
+            .enabled
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = config.enabled;
+        state.enabled.clear_poison();
+        *state
+            .custom_triggers
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = get_custom_trigger_names(config);
+        state.custom_triggers.clear_poison();
+    }
+    if let Some(tray) = app.try_state::<crate::tray::TrayState>() {
+        let _ = tray.0.set_checked(config.enabled);
+    }
+    let _ = app.emit("flick://enabled-changed", config.enabled);
+}
+
+fn save_at(path: &Path, config: &FlickConfig) -> Result<()> {
+    let json = serde_json::to_string_pretty(config).context("Failed to serialize config")?;
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
+    let temporary = path.with_file_name(format!("config-{}-{nonce}.tmp", std::process::id()));
+    let result = (|| -> Result<()> {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)?;
+        file.write_all(json.as_bytes())?;
+        file.sync_all()?;
+        drop(file); // Windows cannot replace a file while our write handle is open.
+        fs::rename(&temporary, path)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result.context("Failed to save settings; the previous settings file was preserved")
 }
 
 /// Extract custom trigger names from the config for trigger detection.
@@ -314,6 +415,50 @@ pub fn get_custom_trigger_names(config: &FlickConfig) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn field_updates_preserve_other_subsystems_and_reject_invalid_values() {
+        let mut config = FlickConfig::default();
+        config.dictation_model_id = "parakeet".into();
+        config.local_models.push(LocalModel {
+            id: "parakeet".into(),
+            name: "Parakeet".into(),
+            file_name: "model.gguf".into(),
+            size_bytes: 42,
+            sha256: "hash".into(),
+            installed: true,
+        });
+        let merged = merge_fields(&config, serde_json::json!({"theme": "light"})).unwrap();
+        assert_eq!(merged.theme, "light");
+        assert_eq!(merged.dictation_model_id, "parakeet");
+        assert_eq!(merged.local_models, config.local_models);
+        assert!(merge_fields(&config, serde_json::json!({"enabled": "yes"})).is_err());
+        assert!(merge_fields(&config, serde_json::json!({"local_models": []})).is_err());
+        assert!(merge_fields(&config, serde_json::json!({"unknown": true})).is_err());
+    }
+
+    #[test]
+    fn settings_replace_atomically_and_invalid_files_are_not_reset() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory =
+            std::env::temp_dir().join(format!("flick-config-test-{}-{nonce}", std::process::id()));
+        fs::create_dir(&directory).unwrap();
+        let path = directory.join("config.json");
+        let mut config = FlickConfig::default();
+        save_at(&path, &config).unwrap();
+        config.enabled = false;
+        save_at(&path, &config).unwrap();
+        assert!(!load_at(&path).unwrap().enabled);
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+        fs::write(&path, "broken config").unwrap();
+        assert!(load_at(&path).is_err());
+        assert_eq!(fs::read_to_string(&path).unwrap(), "broken config");
+        fs::remove_file(path).unwrap();
+        fs::remove_dir(directory).unwrap();
+    }
 
     #[test]
     fn test_default_config() {

@@ -62,6 +62,28 @@
   let recordingDeletionMessage = $state("");
   let templatePath = $state("");
   let templateMessage = $state("");
+  let settingsError = $state("");
+  let saveQueue = Promise.resolve();
+  let settingsRevision = 0;
+  let failedPatches = {};
+
+  function savePatch(patch) {
+    const snapshot = JSON.parse(JSON.stringify(patch));
+    const revision = ++settingsRevision;
+    saveQueue = saveQueue.catch(() => {}).then(async () => {
+      try {
+        await invoke("update_config_fields", { patch: { ...failedPatches, ...snapshot } });
+        failedPatches = {};
+        if (revision === settingsRevision) settingsError = "";
+        return true;
+      } catch (error) {
+        failedPatches = { ...failedPatches, ...snapshot };
+        settingsError = `Settings could not be saved. Your changes are not applied. ${String(error)}`;
+        return false;
+      }
+    });
+    return saveQueue;
+  }
 
   const tabs = [
     { id: "home", labelKey: "tab.home", icon: "info" },
@@ -148,9 +170,11 @@
   }
 
   async function refreshDictationConfiguration() {
+    const revision = settingsRevision;
     try {
+      await saveQueue;
       const saved = await invoke("get_config");
-      if (saved) config = { ...config, ...saved };
+      if (saved && revision === settingsRevision) config = { ...config, ...saved };
     } catch (error) {
       console.error("Failed to refresh dictation configuration:", error);
     }
@@ -234,6 +258,9 @@
     // leave duplicate event listeners behind.
     let disposed = false;
     let unlisten = () => {};
+    let unlistenEnabled = () => {};
+    void listen("flick://enabled-changed", ({ payload }) => config.enabled = Boolean(payload))
+      .then((dispose) => { if (disposed) dispose(); else unlistenEnabled = dispose; }).catch(() => {});
     void (async () => {
       const disposeHistoryListener = await listen("flick://open-history", () => activeTab = "history");
       if (disposed) {
@@ -259,18 +286,20 @@
           const autostartEnabled = await isEnabled();
           if (autostartEnabled !== config.launch_at_login) {
             config.launch_at_login = autostartEnabled;
-            await invoke("save_config", { config });
+            await savePatch({ launch_at_login: autostartEnabled });
           }
         } catch (autostartError) {
           console.error("Failed to read launch-at-login state:", autostartError);
         }
       } catch (e) {
         console.error("Failed to load config:", e);
+        settingsError = `Could not load settings. Existing settings have not been changed. ${String(e)}`;
       }
     })();
     return () => {
       disposed = true;
       unlisten();
+      unlistenEnabled();
     };
   });
 
@@ -278,27 +307,19 @@
     config[field] = value;
     if (field === "theme") applyTheme(value);
     if (field === "app_language") applyLanguage(value);
-    try {
-      await invoke("save_config", { config });
-    } catch (e) {
-      console.error("Failed to save config:", e);
-    }
+    return savePatch({ [field]: value });
   }
 
   async function handleDictationProviderChange() {
     if (config.dictation_provider !== "local-whisper") {
       config.dictation_translate_to_english = false;
     }
-    try {
-      await invoke("save_config", { config });
-    } catch (e) {
-      console.error("Failed to save dictation provider:", e);
-    }
+    await savePatch({ dictation_provider: config.dictation_provider, dictation_translate_to_english: config.dictation_translate_to_english });
   }
 
   async function updateFloatingPillPosition() {
     try {
-      await invoke("save_config", { config });
+      if (!await savePatch({ floating_pill_position: config.floating_pill_position })) return;
       await invoke("apply_floating_pill_position");
     } catch (e) {
       console.error("Failed to reposition floating pill:", e);
@@ -314,19 +335,14 @@
       config.model = defaultModels.openrouter;
     }
     if (config.provider === "custom" && !currentModel) config.model = "local-model";
-
-    try {
-      await invoke("save_config", { config });
-    } catch (e) {
-      console.error("Failed to save config:", e);
-    }
+    await savePatch({ provider: config.provider, model: config.model });
   }
 
   async function toggleEnabled() {
     const newVal = !config.enabled;
     config.enabled = newVal;
     try {
-      await invoke("toggle_enabled", { enabled: newVal });
+      await savePatch({ enabled: newVal });
     } catch (e) {
       console.error("Failed to toggle:", e);
     }
@@ -343,7 +359,7 @@
       } else {
         await disable();
       }
-      await invoke("save_config", { config });
+      await savePatch({ launch_at_login: newVal });
     } catch (e) {
       config.launch_at_login = previousVal;
       console.error("Failed to update launch at login:", e);
@@ -376,6 +392,7 @@
 </script>
 
 <div class="settings-window">
+  {#if settingsError}<p class="settings-error" role="alert">{settingsError} <button onclick={() => savePatch({})}>Retry save</button></p>{/if}
   <!-- Title bar -->
   <div class="title-bar" data-tauri-drag-region>
     <div class="title-bar-content">

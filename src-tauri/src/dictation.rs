@@ -18,11 +18,14 @@ struct Active {
     samples: Arc<Mutex<Vec<f32>>>,
     channels: usize,
     rate: u32,
+    settings: crate::config::FlickConfig,
+    abandoned: Arc<AtomicBool>,
 }
 struct Capture {
     samples: Vec<f32>,
     channels: usize,
     rate: u32,
+    settings: crate::config::FlickConfig,
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct InputDevice {
@@ -37,7 +40,8 @@ pub struct DictationRuntimeInfo {
 }
 enum Command {
     Start {
-        device_id: Option<String>,
+        settings: crate::config::FlickConfig,
+        abandoned: Arc<AtomicBool>,
         response: mpsc::Sender<Result<()>>,
     },
     Stop(mpsc::Sender<Result<Capture>>),
@@ -48,13 +52,27 @@ pub struct DictationState {
     recording: Arc<AtomicBool>,
     transcribing: Arc<AtomicBool>,
     input_level: Arc<AtomicU32>,
+    starting: AtomicBool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct DictationTarget {
-    app_name: String,
-    process_path: String,
+/// Post-processing and insertion must use the same choices as capture, even if
+/// settings are edited while the microphone or transcription engine is busy.
+pub struct DictationResult {
+    pub text: String,
+    pub settings: crate::config::FlickConfig,
+    pub target: Option<crate::active_target::ActiveTarget>,
 }
+
+/// Ensure failed, cancelled, or unwound operations release their busy state.
+struct ResetFlag<'a>(&'a AtomicBool);
+
+impl Drop for ResetFlag<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
+}
+
+type DictationTarget = crate::active_target::ActiveTarget;
 
 /// Only foreground application identity is retained while transcription runs;
 /// no title, selected text, clipboard, or UI content is stored here.
@@ -93,6 +111,7 @@ impl DictationState {
             recording,
             transcribing,
             input_level,
+            starting: AtomicBool::new(false),
         }
     }
 }
@@ -108,43 +127,55 @@ fn audio_loop(
     recording: Arc<AtomicBool>,
     input_level: Arc<AtomicU32>,
 ) {
+    let _recording_guard = ResetFlag(&recording);
     let mut active: Option<Active> = None;
     for command in receiver {
         match command {
             Command::Start {
-                device_id,
+                settings,
+                abandoned,
                 response,
             } => {
-                let result = if active.is_some() {
-                    Ok(())
+                if active.is_some() {
+                    let _ = response.send(Err(anyhow::anyhow!("Dictation is already recording")));
+                    continue;
+                }
+                let result = if abandoned.load(Ordering::SeqCst) {
+                    Err(anyhow::anyhow!("Microphone start was cancelled"))
                 } else {
-                    create(device_id.as_deref(), Arc::clone(&input_level)).map(|value| {
-                        active = Some(value);
-                        recording.store(true, Ordering::SeqCst);
-                    })
+                    create(settings, Arc::clone(&input_level), Arc::clone(&abandoned))
                 };
-                let _ = response.send(result);
+                active = complete_audio_start(result, response, &abandoned, &recording);
+                if active.is_none() {
+                    input_level.store(0.0f32.to_bits(), Ordering::Relaxed);
+                }
             }
             Command::Stop(response) => {
                 let result = active
                     .take()
                     .map(|value| {
                         recording.store(false, Ordering::SeqCst);
+                        input_level.store(0.0f32.to_bits(), Ordering::Relaxed);
                         let Active {
                             stream,
                             samples,
                             channels,
                             rate,
+                            settings,
+                            abandoned,
                         } = value;
+                        abandoned.store(true, Ordering::SeqCst);
                         drop(stream);
-                        let captured_samples = samples
-                            .lock()
-                            .map_err(|_| anyhow::anyhow!("Audio buffer unavailable"))?
-                            .clone();
+                        let captured_samples = std::mem::take(
+                            &mut *samples
+                                .lock()
+                                .map_err(|_| anyhow::anyhow!("Audio buffer unavailable"))?,
+                        );
                         Ok(Capture {
                             samples: captured_samples,
                             channels,
                             rate,
+                            settings,
                         })
                     })
                     .unwrap_or_else(|| Err(anyhow::anyhow!("Dictation is not recording")));
@@ -155,10 +186,12 @@ fn audio_loop(
                     .take()
                     .map(|value| {
                         recording.store(false, Ordering::SeqCst);
+                        input_level.store(0.0f32.to_bits(), Ordering::Relaxed);
+                        value.abandoned.store(true, Ordering::SeqCst);
                         drop(value.stream);
                         Ok(())
                     })
-                    .unwrap_or_else(|| Err(anyhow::anyhow!("Dictation is not recording")));
+                    .unwrap_or(Ok(()));
                 let _ = response.send(result);
             }
         }
@@ -170,7 +203,15 @@ pub fn is_recording(app: &AppHandle) -> bool {
         .is_some_and(|state| state.recording.load(Ordering::SeqCst))
 }
 
-fn show_overlay(app: &AppHandle, state: &str) {
+fn show_overlay(app: &AppHandle, state: &str, settings: &crate::config::FlickConfig) {
+    let _ = app.emit(
+        "flick://dictation-session",
+        serde_json::json!({
+            "state": state,
+            "provider_id": settings.dictation_provider,
+            "app_language": settings.app_language,
+        }),
+    );
     let _ = app.emit("flick://dictation-state", state);
     // Compositors may promote even non-focusable WebKit windows to the active
     // surface. That makes paste-back unsafe, particularly under Wayland, so
@@ -229,6 +270,36 @@ pub fn dictation_runtime_info() -> DictationRuntimeInfo {
     }
 }
 
+/// Native device creation may outlive its caller's timeout. Keep a stream only
+/// when the caller still accepts it; otherwise dropping it releases the mic.
+fn complete_audio_start<T>(
+    result: Result<T>,
+    response: mpsc::Sender<Result<()>>,
+    abandoned: &AtomicBool,
+    recording: &AtomicBool,
+) -> Option<T> {
+    match result {
+        Ok(value) if !abandoned.load(Ordering::SeqCst) => {
+            recording.store(true, Ordering::SeqCst);
+            if response.send(Ok(())).is_ok() {
+                Some(value)
+            } else {
+                abandoned.store(true, Ordering::SeqCst);
+                recording.store(false, Ordering::SeqCst);
+                None
+            }
+        }
+        Ok(_) => {
+            let _ = response.send(Err(anyhow::anyhow!("Microphone start was cancelled")));
+            None
+        }
+        Err(error) => {
+            let _ = response.send(Err(error));
+            None
+        }
+    }
+}
+
 const AUDIO_COMMAND_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Native device calls run off the UI thread. A broken driver or worker must
@@ -270,47 +341,48 @@ pub fn start(app: &AppHandle) -> Result<()> {
     let state = app
         .try_state::<DictationState>()
         .context("Dictation is not initialized")?;
+    if state.starting.swap(true, Ordering::SeqCst) {
+        bail!("Microphone is still starting");
+    }
+    let _starting_guard = ResetFlag(&state.starting);
     if state.transcribing.load(Ordering::SeqCst) {
         bail!("Dictation is still transcribing the previous recording");
     }
+    if state.recording.load(Ordering::SeqCst) {
+        bail!("Dictation is already recording");
+    }
+    // Capture one immutable settings snapshot for this recording. In
+    // particular, changing Local to Cloud while recording must never upload
+    // audio that was captured under the previous privacy choice.
+    let settings = crate::config::load_config(app)?;
+    crate::dictation_provider::provider_info(&settings.dictation_provider)?;
     remember_target(app);
-    let device_id = app
-        .try_state::<crate::AppState>()
-        .and_then(|state| {
-            state
-                .config
-                .lock()
-                .ok()
-                .map(|config| config.dictation_device_id.clone())
-        })
-        .filter(|id| !id.is_empty());
+    let abandoned = Arc::new(AtomicBool::new(false));
     let (sender, receiver) = mpsc::channel();
     state
         .sender
         .send(Command::Start {
-            device_id,
+            settings: settings.clone(),
+            abandoned: Arc::clone(&abandoned),
             response: sender,
         })
         .context("Audio thread unavailable")?;
-    await_audio_response(receiver)?;
-    show_overlay(app, "recording");
+    if let Err(error) = await_audio_response(receiver) {
+        abandoned.store(true, Ordering::SeqCst);
+        return Err(error);
+    }
+    show_overlay(app, "recording", &settings);
     Ok(())
 }
 
 fn foreground_target() -> Option<DictationTarget> {
-    let window = crate::active_target::get()?;
-    Some(DictationTarget {
-        app_name: window.app_name,
-        process_path: window.process_path,
-    })
+    let mut window = crate::active_target::get()?;
+    window.title.clear();
+    Some(window)
 }
 
 fn same_target(expected: &DictationTarget, current: &DictationTarget) -> bool {
-    !expected.app_name.is_empty()
-        && expected.app_name == current.app_name
-        && (expected.process_path.is_empty()
-            || current.process_path.is_empty()
-            || expected.process_path == current.process_path)
+    crate::active_target::matches_target(expected, current)
 }
 
 fn remember_target(app: &AppHandle) {
@@ -328,9 +400,15 @@ pub fn target_is_still_appropriate(app: &AppHandle) -> bool {
     let expected = app
         .try_state::<DictationTargetState>()
         .and_then(|state| state.target.lock().ok().and_then(|target| target.clone()));
+    captured_target_is_still_appropriate(expected.as_ref())
+}
+
+pub fn captured_target_is_still_appropriate(
+    expected: Option<&crate::active_target::ActiveTarget>,
+) -> bool {
     expected
         .zip(foreground_target())
-        .is_some_and(|(expected, current)| same_target(&expected, &current))
+        .is_some_and(|(expected, current)| same_target(expected, &current))
 }
 
 /// Discard an active recording without transcription, history, or paste-back.
@@ -348,7 +426,13 @@ pub fn cancel(app: &AppHandle) -> Result<()> {
     Ok(())
 }
 
-fn create(device_id: Option<&str>, input_level: Arc<AtomicU32>) -> Result<Active> {
+fn create(
+    settings: crate::config::FlickConfig,
+    input_level: Arc<AtomicU32>,
+    abandoned: Arc<AtomicBool>,
+) -> Result<Active> {
+    let device_id =
+        (!settings.dictation_device_id.is_empty()).then_some(settings.dictation_device_id.as_str());
     let host = cpal::default_host();
     let device = match device_id {
         Some(id) => host
@@ -367,9 +451,14 @@ fn create(device_id: Option<&str>, input_level: Arc<AtomicU32>) -> Result<Active
         .context("Could not read microphone configuration")?;
     let channels = config.channels() as usize;
     let rate = config.sample_rate().0;
-    let samples = Arc::new(Mutex::new(Vec::with_capacity(
-        rate as usize * channels * 30,
-    )));
+    if channels == 0 || rate == 0 {
+        bail!("The selected microphone returned an invalid audio format");
+    }
+    let mut buffer = Vec::new();
+    buffer
+        .try_reserve_exact(rate as usize * channels * 2)
+        .context("Not enough memory to start this microphone")?;
+    let samples = Arc::new(Mutex::new(buffer));
     // Cap by the actual device format.  Some USB interfaces expose more than
     // two channels; using a fixed stereo cap would silently shorten their
     // maximum recording duration.
@@ -380,7 +469,11 @@ fn create(device_id: Option<&str>, input_level: Arc<AtomicU32>) -> Result<Active
         Arc::clone(&samples),
         input_level,
         max_samples,
+        Arc::clone(&abandoned),
     )?;
+    if abandoned.load(Ordering::SeqCst) {
+        bail!("Microphone start was cancelled");
+    }
     stream
         .play()
         .context("Could not start microphone capture")?;
@@ -389,6 +482,8 @@ fn create(device_id: Option<&str>, input_level: Arc<AtomicU32>) -> Result<Active
         samples,
         channels,
         rate,
+        settings,
+        abandoned,
     })
 }
 fn build_stream(
@@ -397,6 +492,7 @@ fn build_stream(
     samples: Arc<Mutex<Vec<f32>>>,
     input_level: Arc<AtomicU32>,
     max_samples: usize,
+    abandoned: Arc<AtomicBool>,
 ) -> Result<Stream> {
     let stream_config: cpal::StreamConfig = config.clone().into();
     let error = |error| log::error!("Microphone stream error: {error}");
@@ -404,7 +500,9 @@ fn build_stream(
         SampleFormat::F32 => device.build_input_stream(
             &stream_config,
             move |data: &[f32], _| {
-                append(&samples, &input_level, max_samples, data.iter().copied())
+                if !abandoned.load(Ordering::SeqCst) {
+                    append(&samples, &input_level, max_samples, data.iter().copied());
+                }
             },
             error,
             None,
@@ -412,6 +510,9 @@ fn build_stream(
         SampleFormat::I16 => device.build_input_stream(
             &stream_config,
             move |data: &[i16], _| {
+                if abandoned.load(Ordering::SeqCst) {
+                    return;
+                }
                 append(
                     &samples,
                     &input_level,
@@ -425,6 +526,9 @@ fn build_stream(
         SampleFormat::U16 => device.build_input_stream(
             &stream_config,
             move |data: &[u16], _| {
+                if abandoned.load(Ordering::SeqCst) {
+                    return;
+                }
                 append(
                     &samples,
                     &input_level,
@@ -468,6 +572,12 @@ pub async fn stop_dictation(app: AppHandle) -> Result<String, String> {
     stop_and_transcribe(&app).await.map_err(|e| e.to_string())
 }
 pub async fn stop_and_transcribe(app: &AppHandle) -> Result<String> {
+    stop_and_transcribe_session(app)
+        .await
+        .map(|result| result.text)
+}
+
+pub async fn stop_and_transcribe_session(app: &AppHandle) -> Result<DictationResult> {
     let transcribing = {
         let state = app
             .try_state::<DictationState>()
@@ -477,13 +587,16 @@ pub async fn stop_and_transcribe(app: &AppHandle) -> Result<String> {
         }
         Arc::clone(&state.transcribing)
     };
+    let _transcription_guard = ResetFlag(&transcribing);
     let result = stop_and_transcribe_inner(app).await;
-    transcribing.store(false, Ordering::SeqCst);
     hide_overlay(app);
     result
 }
 
-async fn stop_and_transcribe_inner(app: &AppHandle) -> Result<String> {
+async fn stop_and_transcribe_inner(app: &AppHandle) -> Result<DictationResult> {
+    let target = app
+        .try_state::<DictationTargetState>()
+        .and_then(|state| state.target.lock().ok().and_then(|target| target.clone()));
     let capture = {
         let state = app
             .try_state::<DictationState>()
@@ -499,7 +612,7 @@ async fn stop_and_transcribe_inner(app: &AppHandle) -> Result<String> {
     if audio.len() < 1_600 {
         bail!("No speech was captured. Check your microphone and try again.");
     }
-    let settings = crate::config::load_config(app)?;
+    let settings = capture.settings;
     if settings.retain_recordings {
         retain_recording(app, &audio, settings.recording_retention_count).await?;
     }
@@ -522,11 +635,11 @@ async fn stop_and_transcribe_inner(app: &AppHandle) -> Result<String> {
         bail!("The selected local speech model can transcribe but cannot translate to English. Turn off translation or choose a multilingual Whisper model.");
     }
     let path = if provider.requires_local_model {
-        crate::models::verified_installed_model_path(app).await?
+        crate::models::verified_configured_model_path(app, &settings).await?
     } else {
         None
     };
-    show_overlay(app, "transcribing");
+    show_overlay(app, "transcribing", &settings);
     let text = crate::dictation_provider::transcribe(
         settings.dictation_provider.clone(),
         crate::dictation_provider::TranscriptionRequest {
@@ -542,11 +655,19 @@ async fn stop_and_transcribe_inner(app: &AppHandle) -> Result<String> {
     if text.trim().is_empty() {
         bail!("No speech was detected.");
     }
-    Ok(post_process(
+    let text = post_process(
         text,
         settings.dictation_filler_cleanup,
         &settings.dictation_corrections,
-    ))
+    );
+    if text.is_empty() {
+        bail!("No speech remained after cleanup. Check your text corrections and try again.");
+    }
+    Ok(DictationResult {
+        text,
+        settings,
+        target,
+    })
 }
 
 async fn retain_recording(app: &AppHandle, audio: &[f32], limit: usize) -> Result<()> {
@@ -626,7 +747,7 @@ pub fn clear_retained_recordings(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 fn resample(input: &[f32], channels: usize, rate: u32) -> Vec<f32> {
-    if channels == 0 || input.is_empty() {
+    if channels == 0 || rate == 0 || input.is_empty() {
         return Vec::new();
     }
     let mono: Vec<f32> = input
@@ -757,8 +878,45 @@ mod tests {
     fn disconnected_audio_worker_returns_a_recoverable_error() {
         let (sender, receiver) = mpsc::channel::<Result<()>>();
         drop(sender);
-        let error = await_audio_response(receiver).expect_err("closed workers must not hang callers");
+        let error =
+            await_audio_response(receiver).expect_err("closed workers must not hang callers");
         assert!(error.to_string().contains("Audio service is unavailable"));
+    }
+    #[test]
+    fn a_late_microphone_start_is_dropped_when_its_caller_timed_out() {
+        struct MockMicrophone(Arc<AtomicBool>);
+        impl Drop for MockMicrophone {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+        for abandon_before_completion in [false, true] {
+            let released = Arc::new(AtomicBool::new(false));
+            let abandoned = AtomicBool::new(abandon_before_completion);
+            let recording = AtomicBool::new(false);
+            let (sender, receiver) = mpsc::channel();
+            drop(receiver);
+            let capture = complete_audio_start(
+                Ok(MockMicrophone(Arc::clone(&released))),
+                sender,
+                &abandoned,
+                &recording,
+            );
+            assert!(capture.is_none());
+            assert!(
+                released.load(Ordering::SeqCst),
+                "the native microphone must be released"
+            );
+            assert!(!recording.load(Ordering::SeqCst));
+        }
+    }
+    #[test]
+    fn cancelled_operations_release_their_busy_flag() {
+        let flag = AtomicBool::new(true);
+        {
+            let _guard = ResetFlag(&flag);
+        }
+        assert!(!flag.load(Ordering::SeqCst));
     }
     #[test]
     fn downmixes_and_resamples() {
@@ -843,6 +1001,7 @@ mod tests {
         let expected = DictationTarget {
             app_name: "slack".into(),
             process_path: "c:/apps/slack.exe".into(),
+            ..Default::default()
         };
         assert!(same_target(&expected, &expected));
         assert!(!same_target(
@@ -850,6 +1009,7 @@ mod tests {
             &DictationTarget {
                 app_name: "discord".into(),
                 process_path: "c:/apps/discord.exe".into(),
+                ..Default::default()
             }
         ));
     }

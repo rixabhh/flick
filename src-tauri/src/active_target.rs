@@ -9,6 +9,19 @@ pub struct ActiveTarget {
     pub app_name: String,
     pub title: String,
     pub process_path: String,
+    pub process_id: u64,
+    pub window_id: String,
+}
+
+/// App names alone cannot distinguish two windows of the same browser. When
+/// the OS supplies a process/window identity, require it to survive unchanged.
+/// A failed follow-up identity lookup must never relax an earlier guard.
+pub fn matches_target(expected: &ActiveTarget, current: &ActiveTarget) -> bool {
+    !expected.app_name.is_empty()
+        && expected.app_name == current.app_name
+        && (expected.process_path.is_empty() || expected.process_path == current.process_path)
+        && (expected.process_id == 0 || expected.process_id == current.process_id)
+        && (expected.window_id.is_empty() || expected.window_id == current.window_id)
 }
 
 #[cfg(any(target_os = "windows", target_os = "linux"))]
@@ -18,6 +31,8 @@ pub fn get() -> Option<ActiveTarget> {
         app_name: window.app_name.to_ascii_lowercase(),
         title: window.title.to_ascii_lowercase(),
         process_path: window.process_path.to_string_lossy().to_ascii_lowercase(),
+        process_id: window.process_id,
+        window_id: window.window_id,
     })
 }
 
@@ -31,7 +46,7 @@ pub fn get() -> Option<ActiveTarget> {
     let script = r#"
         ObjC.import('AppKit');
         const app = $.NSWorkspace.sharedWorkspace.frontmostApplication;
-        [app.localizedName.js, app.bundleURL.path.js].join('\t');
+        [app.localizedName.js, app.bundleURL.path.js, app.processIdentifier].join('\t');
     "#;
     let output = Command::new("osascript")
         .args(["-l", "JavaScript", "-e", script])
@@ -41,11 +56,16 @@ pub fn get() -> Option<ActiveTarget> {
         return None;
     }
     let value = String::from_utf8(output.stdout).ok()?;
-    let (app_name, process_path) = value.trim().split_once('\t')?;
+    let mut fields = value.trim().split('\t');
+    let app_name = fields.next()?;
+    let process_path = fields.next()?;
+    let process_id = fields.next()?.parse().ok()?;
     (!app_name.trim().is_empty()).then(|| ActiveTarget {
         app_name: app_name.trim().to_ascii_lowercase(),
         title: String::new(),
         process_path: process_path.trim().to_ascii_lowercase(),
+        process_id,
+        window_id: String::new(),
     })
 }
 
@@ -56,7 +76,7 @@ pub fn get() -> Option<ActiveTarget> {
 
 #[cfg(test)]
 mod tests {
-    use super::ActiveTarget;
+    use super::{matches_target, ActiveTarget};
 
     #[test]
     fn target_identity_is_content_free() {
@@ -64,5 +84,26 @@ mod tests {
         assert!(target.app_name.is_empty());
         assert!(target.title.is_empty());
         assert!(target.process_path.is_empty());
+    }
+
+    #[test]
+    fn target_guard_distinguishes_windows_and_fails_on_missing_identity() {
+        let original = ActiveTarget {
+            app_name: "browser".into(),
+            process_path: "/apps/browser".into(),
+            process_id: 42,
+            window_id: "window-a".into(),
+            ..ActiveTarget::default()
+        };
+        assert!(matches_target(&original, &original));
+        let mut changed = original.clone();
+        changed.window_id = "window-b".into();
+        assert!(!matches_target(&original, &changed));
+        changed = original.clone();
+        changed.process_path.clear();
+        assert!(!matches_target(&original, &changed));
+        changed = original.clone();
+        changed.process_id = 0;
+        assert!(!matches_target(&original, &changed));
     }
 }

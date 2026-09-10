@@ -18,45 +18,62 @@
   let testMessage = $state("");
   let saving = $state(false);
   let hasKey = $state(false);
+  let loadingKey = $state(false);
+  let generation = 0;
+  let resultTimer;
 
-  async function loadExistingKey() {
+  async function loadExistingKey(selectedProvider, currentGeneration) {
+    loadingKey = true;
     try {
-      const key = await invoke("load_api_key", { provider });
+      const key = await invoke("load_api_key", { provider: selectedProvider });
+      if (currentGeneration !== generation) return;
       if (key) {
         apiKey = key;
         hasKey = true;
       }
     } catch {
-      hasKey = false;
+      if (currentGeneration === generation) hasKey = false;
+    } finally {
+      if (currentGeneration === generation) loadingKey = false;
     }
   }
 
   $effect(() => {
-    provider;
+    const selectedProvider = provider;
+    const currentGeneration = ++generation;
     apiKey = "";
     hasKey = false;
-    loadExistingKey();
+    saving = testing = false;
+    masked = true;
+    testResult = null;
+    testMessage = "";
+    loadExistingKey(selectedProvider, currentGeneration);
+    return () => { generation += 1; clearTimeout(resultTimer); };
   });
 
   async function saveKey() {
-    if (!apiKey.trim()) return;
+    if (loadingKey || saving || !apiKey.trim()) return;
+    const currentGeneration = generation;
     saving = true;
     try {
       await invoke("save_api_key", { key: apiKey.trim(), provider });
+      if (currentGeneration !== generation) return;
       hasKey = true;
       testResult = "success";
       testMessage = "API key saved";
       clearResultAfterDelay();
     } catch (e) {
+      if (currentGeneration !== generation) return;
       testResult = "error";
       testMessage = `Failed to save: ${e}`;
       clearResultAfterDelay();
     }
-    saving = false;
+    if (currentGeneration === generation) saving = false;
   }
 
   async function testConnection() {
-    if ((provider !== "custom" && !apiKey.trim()) || (provider === "custom" && !customBaseUrl.trim())) return;
+    if (loadingKey || testing || (provider !== "custom" && !apiKey.trim()) || (provider === "custom" && !customBaseUrl.trim())) return;
+    const currentGeneration = generation;
     testing = true;
     testResult = null;
     try {
@@ -66,9 +83,11 @@
         model,
         customBaseUrl,
       });
+      if (currentGeneration !== generation) return;
       testResult = "success";
       testMessage = "Connection successful!";
     } catch (e) {
+      if (currentGeneration !== generation) return;
       testResult = "error";
       testMessage = `Connection failed: ${e}`;
     }
@@ -77,7 +96,8 @@
   }
 
   function clearResultAfterDelay() {
-    setTimeout(() => {
+    clearTimeout(resultTimer);
+    resultTimer = setTimeout(() => {
       testResult = null;
       testMessage = "";
     }, 3000);
@@ -123,6 +143,7 @@
         <input
           id="api-key-input"
           type="password"
+          disabled={loadingKey || saving}
           bind:value={apiKey}
           placeholder={keyPlaceholder()}
           autocomplete="off"
@@ -131,6 +152,7 @@
         <input
           id="api-key-input-visible"
           type="text"
+          disabled={loadingKey || saving}
           bind:value={apiKey}
           placeholder={keyPlaceholder()}
           autocomplete="off"
@@ -154,7 +176,7 @@
   </div>
 
   <div class="button-row">
-    <button class="btn btn-primary btn-sm" onclick={saveKey} disabled={saving || !apiKey.trim()}>
+    <button class="btn btn-primary btn-sm" onclick={saveKey} disabled={loadingKey || saving || !apiKey.trim()}>
       {#if saving}
         Saving…
       {:else}
@@ -164,7 +186,7 @@
     {#if showTest}<button
       class="btn btn-secondary btn-sm"
       onclick={testConnection}
-      disabled={testing || (provider !== "custom" && !apiKey.trim()) || (provider === "custom" && !customBaseUrl.trim())}
+      disabled={loadingKey || testing || (provider !== "custom" && !apiKey.trim()) || (provider === "custom" && !customBaseUrl.trim())}
     >
       {#if testing}
         Testing…

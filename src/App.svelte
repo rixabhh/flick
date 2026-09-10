@@ -7,7 +7,14 @@
   import ReplyComposer from "./lib/ReplyComposer.svelte";
   import DictationOverlay from "./lib/DictationOverlay.svelte";
 
-  let windowLabel = $state("settings");
+  function currentLabel() {
+    try { return getCurrentWindow().label; }
+    catch { return "settings"; }
+  }
+
+  // Window metadata is available before mount. Avoid briefly mounting the
+  // settings screen (and its configuration writes) inside a hidden pill.
+  let windowLabel = $state(currentLabel());
 
   async function detectWindow() {
     try {

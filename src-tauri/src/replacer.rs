@@ -1,46 +1,244 @@
-// Flick - replacer.rs
-// Per PRD §8.3: Text replacement flow using clipboard strategy.
-// The 12-step pipeline: save clipboard, select-all, copy, strip trigger,
-// call AI, paste result, restore clipboard.
+//! Clipboard-assisted capture and guarded insertion.
+//!
+//! Clipboard ownership is limited to the short copy/paste operation. Network
+//! requests never retain a snapshot that could later overwrite a newer copy.
 
 use anyhow::{bail, Context, Result};
 use arboard::Clipboard;
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
+use tokio::sync::{Mutex, MutexGuard};
 use tokio::time::sleep;
 
-use crate::ai_client;
+use crate::{active_target, ai_client};
 
 const KEY_SETTLE_DELAY: Duration = Duration::from_millis(25);
-const CLIPBOARD_COPY_DELAY: Duration = Duration::from_millis(60);
-const CLIPBOARD_RESTORE_DELAY: Duration = Duration::from_millis(50);
+const CLIPBOARD_COPY_DELAY: Duration = Duration::from_millis(30);
+const CLIPBOARD_COPY_TIMEOUT: Duration = Duration::from_millis(750);
+const CLIPBOARD_RESTORE_DELAY: Duration = Duration::from_millis(100);
 const PASTE_DELAY: Duration = Duration::from_millis(35);
 
-fn same_target(expected: &crate::active_target::ActiveTarget, current: &crate::active_target::ActiveTarget) -> bool {
-    !expected.app_name.is_empty()
-        && expected.app_name == current.app_name
-        && (expected.process_path.is_empty()
-            || current.process_path.is_empty()
-            || expected.process_path == current.process_path)
+// One persistent handle also keeps restored/copied data available on Linux,
+// where dropping the last arboard handle relinquishes clipboard ownership.
+static CLIPBOARD: Mutex<Option<Clipboard>> = Mutex::const_new(None);
+static COPY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+fn clipboard_access() -> Result<MutexGuard<'static, Option<Clipboard>>> {
+    let mut state = CLIPBOARD.try_lock().map_err(|_| {
+        anyhow::anyhow!("Flick is finishing another copy or paste. Please try again in a moment.")
+    })?;
+    if state.is_none() {
+        *state = Some(Clipboard::new().context("Failed to access clipboard")?);
+    }
+    Ok(state)
 }
 
-fn verify_original_target(expected: &crate::active_target::ActiveTarget) -> Result<()> {
-    let current = crate::active_target::get()
+/// Explicit Copy actions share the same lock as temporary clipboard use.
+/// Otherwise a delayed paste restoration could erase a freshly copied draft.
+pub fn copy_text_to_clipboard(text: &str) -> Result<()> {
+    clipboard_access()?
+        .as_mut()
+        .context("Clipboard is unavailable")?
+        .set_text(text.to_owned())
+        .context("Could not write the clipboard")
+}
+
+enum ClipboardSnapshot {
+    Empty,
+    Text(String),
+    Image(arboard::ImageData<'static>),
+}
+
+fn snapshot_clipboard(clipboard: &mut Clipboard) -> Result<ClipboardSnapshot> {
+    match clipboard.get_text() {
+        Ok(text) => return Ok(ClipboardSnapshot::Text(text)),
+        Err(arboard::Error::ContentNotAvailable) => {}
+        Err(error) => return Err(error).context("Could not preserve the clipboard"),
+    }
+    match clipboard.get_image() {
+        Ok(image) => return Ok(ClipboardSnapshot::Image(image)),
+        Err(arboard::Error::ContentNotAvailable) => {}
+        Err(error) => return Err(error).context("Could not preserve the clipboard image"),
+    }
+    // arboard deliberately uses the same error for an empty clipboard and an
+    // unsupported format. Never treat copied files as an empty clipboard.
+    if clipboard_is_empty() {
+        return Ok(ClipboardSnapshot::Empty);
+    }
+    bail!("Flick could not safely preserve the current clipboard contents. Copy it as text or an image first, then try again.")
+}
+
+#[cfg(target_os = "windows")]
+fn clipboard_is_empty() -> bool {
+    #[link(name = "user32")]
+    extern "system" {
+        fn CountClipboardFormats() -> i32;
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn SetLastError(code: u32);
+        fn GetLastError() -> u32;
+    }
+    // CountClipboardFormats also returns zero on failure. Only a successful
+    // empty result is safe to clear when the temporary operation finishes.
+    unsafe {
+        SetLastError(0);
+        CountClipboardFormats() == 0 && GetLastError() == 0
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn clipboard_is_empty() -> bool {
+    std::process::Command::new("osascript")
+        .args(["-l", "JavaScript", "-e",
+            "ObjC.import('AppKit'); Number($.NSPasteboard.generalPasteboard.pasteboardItems.count);"])
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .is_some_and(|output| String::from_utf8_lossy(&output.stdout).trim() == "0")
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+fn clipboard_is_empty() -> bool {
+    false
+}
+
+#[cfg(target_os = "windows")]
+fn clipboard_revision() -> Option<u64> {
+    #[link(name = "user32")]
+    extern "system" {
+        fn GetClipboardSequenceNumber() -> u32;
+    }
+    let revision = unsafe { GetClipboardSequenceNumber() };
+    (revision != 0).then_some(u64::from(revision))
+}
+
+#[cfg(not(target_os = "windows"))]
+fn clipboard_revision() -> Option<u64> {
+    None
+}
+
+fn still_owns_clipboard(
+    expected_text: &str,
+    current_text: Option<&str>,
+    expected_revision: Option<u64>,
+    current_revision: Option<u64>,
+) -> bool {
+    current_text == Some(expected_text)
+        && match expected_revision {
+            Some(expected) => current_revision == Some(expected),
+            None => true,
+        }
+}
+
+struct ClipboardTransaction {
+    state: MutexGuard<'static, Option<Clipboard>>,
+    original: ClipboardSnapshot,
+    owned_text: Option<String>,
+    revision: Option<u64>,
+}
+
+impl ClipboardTransaction {
+    fn begin() -> Result<Self> {
+        let mut state = clipboard_access()?;
+        let original = snapshot_clipboard(state.as_mut().context("Clipboard is unavailable")?)?;
+        Ok(Self {
+            state,
+            original,
+            owned_text: None,
+            revision: None,
+        })
+    }
+
+    fn set_text(&mut self, text: String) -> Result<()> {
+        self.state
+            .as_mut()
+            .context("Clipboard is unavailable")?
+            .set_text(text.clone())
+            .context("Could not prepare the clipboard")?;
+        self.claim_text(text);
+        Ok(())
+    }
+
+    fn claim_text(&mut self, text: String) {
+        self.owned_text = Some(text);
+        self.revision = clipboard_revision();
+    }
+
+    fn get_text(&mut self) -> Result<String, arboard::Error> {
+        match self.state.as_mut() {
+            Some(clipboard) => clipboard.get_text(),
+            None => Err(arboard::Error::ClipboardNotSupported),
+        }
+    }
+
+    fn restore(&mut self) -> Result<()> {
+        let Some(expected) = self.owned_text.as_deref() else {
+            return Ok(());
+        };
+        let clipboard = self.state.as_mut().context("Clipboard is unavailable")?;
+        let current = match clipboard.get_text() {
+            Ok(text) => Some(text),
+            Err(arboard::Error::ContentNotAvailable) => None,
+            Err(error) => {
+                return Err(error).context("Could not check the clipboard before restoring it")
+            }
+        };
+        if still_owns_clipboard(
+            expected,
+            current.as_deref(),
+            self.revision,
+            clipboard_revision(),
+        ) {
+            match &self.original {
+                ClipboardSnapshot::Empty => clipboard.clear(),
+                ClipboardSnapshot::Text(text) => clipboard.set_text(text.clone()),
+                ClipboardSnapshot::Image(image) => clipboard.set_image(image.clone()),
+            }
+            .context("Could not restore the original clipboard contents")?;
+        }
+        self.owned_text = None;
+        Ok(())
+    }
+
+    fn finish(mut self) -> Result<()> {
+        self.restore()
+    }
+}
+
+impl Drop for ClipboardTransaction {
+    fn drop(&mut self) {
+        // Errors and cancelled futures take the same restoration path. A user
+        // copy made since our last write is left intact.
+        if let Err(error) = self.restore() {
+            log::warn!("{error}");
+        }
+    }
+}
+
+fn verify_original_target(expected: &active_target::ActiveTarget) -> Result<()> {
+    let current = active_target::get()
         .context("Flick could not verify the active app before replacing text")?;
-    if same_target(expected, &current) {
+    if active_target::matches_target(expected, &current) {
         Ok(())
     } else {
-        bail!("The original app is no longer active. Flick did not paste into the new app; use Copy last result to recover the completed text.")
+        bail!("The original app or window is no longer active. Flick did not paste into the new target; use Copy last result to recover the completed text.")
     }
 }
 
 fn active_target_is_protected(app: &AppHandle) -> bool {
-    let disabled_apps = app
-        .try_state::<crate::AppState>()
-        .and_then(|state| state.config.lock().ok().map(|config| config.disabled_apps.clone()))
-        .unwrap_or_default();
-    crate::key_hook::active_app_is_protected(&disabled_apps)
+    app.try_state::<crate::AppState>()
+        .and_then(|state| {
+            state
+                .config
+                .lock()
+                .ok()
+                .map(|config| config.disabled_apps.clone())
+        })
+        .map(|disabled| crate::key_hook::active_app_is_protected(&disabled))
+        .unwrap_or(true)
 }
 
 #[cfg(target_os = "macos")]
@@ -53,39 +251,8 @@ fn platform_modifier() -> Key {
     Key::Control
 }
 
-/// A transformation temporarily owns the system clipboard. Preserve the
-/// common non-text case as well as text, and fail before modifying a format
-/// Flick cannot safely put back. Replacing an image with an empty string is a
-/// subtle but destructive interruption to a user's workflow.
-enum ClipboardSnapshot {
-    Text(String),
-    Image(arboard::ImageData<'static>),
-}
-
-fn snapshot_clipboard(clipboard: &mut Clipboard) -> Result<ClipboardSnapshot> {
-    if let Ok(text) = clipboard.get_text() {
-        return Ok(ClipboardSnapshot::Text(text));
-    }
-    if let Ok(image) = clipboard.get_image() {
-        return Ok(ClipboardSnapshot::Image(image));
-    }
-    bail!("Flick could not safely preserve the current clipboard contents. Copy it as text or an image first, then try again.")
-}
-
-fn restore_clipboard(snapshot: &ClipboardSnapshot) {
-    if let Ok(mut clipboard) = Clipboard::new() {
-        let result = match snapshot {
-            ClipboardSnapshot::Text(text) => clipboard.set_text(text.clone()),
-            ClipboardSnapshot::Image(image) => clipboard.set_image(image.clone()),
-        };
-        if let Err(error) = result {
-            log::warn!("Could not restore the original clipboard contents: {error}");
-        }
-    }
-}
-
-/// Execute the full text replacement pipeline - per §8.3.
-#[allow(clippy::too_many_arguments)] // Existing public trigger pipeline; refactor follows its v2 command boundary.
+/// Execute a built-in rewrite with a fresh capture, then a guarded insertion.
+#[allow(clippy::too_many_arguments)]
 pub async fn execute_replacement(
     app: &AppHandle,
     api_key: &str,
@@ -97,151 +264,24 @@ pub async fn execute_replacement(
     trigger: &str,
     show_done_toast: bool,
 ) -> Result<()> {
-    let started_at = Instant::now();
-    if active_target_is_protected(app) {
-        bail!("Flick will not transform text in a protected app or password field")
-    }
-    let original_target = crate::active_target::get()
-        .context("Flick could not verify the active app before transforming text")?;
-
-    // Step 1: Save current clipboard content
-    let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
-    let original_clipboard = snapshot_clipboard(&mut clipboard)?;
-
-    // Step 2-3: Select all text and copy it
-    // We use Ctrl+A to select all in the active field, then Ctrl+C to copy
-    let selected_text = match select_and_copy().await {
-        Ok(text) => text,
-        Err(e) => {
-            restore_clipboard(&original_clipboard);
-            bail!("Failed to select and copy text: {}", e);
-        }
-    };
-    let clipboard_ms = started_at.elapsed().as_millis();
-
-    // Abort if clipboard is empty after copy - per §8.3 failure handling
-    if selected_text.trim().is_empty() {
-        restore_clipboard(&original_clipboard);
-        bail!("No text found to transform");
-    }
-
-    // Step 4: Strip the trigger word from the end of the text
-    let clean_text = selected_text
-        .trim_end()
-        .strip_suffix(trigger)
-        .unwrap_or(&selected_text)
-        .trim()
-        .to_string();
-
-    if clean_text.is_empty() {
-        restore_clipboard(&original_clipboard);
-        bail!("No text found after stripping trigger");
-    }
-
-    // Step 5: Emit "transforming" event to UI → show floating toast
-    let _ = app.emit("flick://transforming", ());
-
-    // Step 6-7: Build prompt and call Gemini Flash API
-    // Check for custom command prompt first, then built-in
-    let prompt = match ai_client::get_prompt(command, param, &clean_text) {
-        Some(p) => p,
-        None => {
-            // This must be a custom command - the prompt will be resolved by the caller
-            // For now, bail if we can't find a prompt
-            let _ = app.emit(
-                "flick://error",
-                serde_json::json!({"message": "Unknown command"}),
-            );
-            restore_clipboard(&original_clipboard);
-            bail!("Unknown command: {}", command);
-        }
-    };
-
-    let transformed =
-        match transform_with_provider(api_key, provider, model, custom_base_url, &prompt).await {
-            Ok(text) => text,
-            Err(e) => {
-                // Per §8.3: If API call fails, restore clipboard and show error toast
-                let _ = app.emit(
-                    "flick://error",
-                    serde_json::json!({"message": format!("API error: {}", e)}),
-                );
-                restore_clipboard(&original_clipboard);
-                bail!("API transform failed: {}", e);
-            }
-        };
-    let ai_ms = started_at
-        .elapsed()
-        .as_millis()
-        .saturating_sub(clipboard_ms);
-
-    // Keep a process-local recovery copy before the guarded paste. This is
-    // never persisted unless the user has enabled history and the paste
-    // succeeds, but it makes a focus-change refusal recoverable.
-    crate::history::remember_result(app, &transformed);
-    if active_target_is_protected(app) {
-        restore_clipboard(&original_clipboard);
-        bail!("Flick will not paste into a protected app or password field. Use Copy last result to recover the completed text.")
-    }
-    if let Err(error) = verify_original_target(&original_target) {
-        restore_clipboard(&original_clipboard);
-        return Err(error);
-    }
-
-    // Step 8: Set transformed text as clipboard content
-    {
-        let mut cb = match Clipboard::new() {
-            Ok(clipboard) => clipboard,
-            Err(error) => {
-                restore_clipboard(&original_clipboard);
-                return Err(error).context("Failed to access clipboard for transformed text");
-            }
-        };
-        // Keep the completed result available for persistent history only
-        // after the guarded paste succeeds below.
-        if let Err(error) = cb.set_text(transformed.clone()) {
-            restore_clipboard(&original_clipboard);
-            return Err(error).context("Failed to set transformed text to clipboard");
-        }
-    }
-
-    // Step 9: Simulate Ctrl+V / Cmd+V → paste transformed text
-    if let Err(e) = simulate_paste().await {
-        restore_clipboard(&original_clipboard);
-        let _ = app.emit(
-            "flick://error",
-            serde_json::json!({"message": "Failed to paste"}),
-        );
-        bail!("Failed to paste: {}", e);
-    }
-
-    // Step 10: Wait briefly so the paste completes before restoring clipboard.
-    sleep(CLIPBOARD_RESTORE_DELAY).await;
-
-    // Step 11: Restore original clipboard content
-    restore_clipboard(&original_clipboard);
-    let _ = crate::history::record(app, "transform", &transformed);
-
-    // Step 12: Always end the progress state. A disabled completion toast must
-    // not leave the "Transforming" indicator on screen indefinitely.
-    if show_done_toast {
-        let _ = app.emit("flick://done", ());
-    } else {
-        let _ = app.emit("flick://transform-finished", ());
-    }
-
-    log::info!(
-        "Replacement completed in {}ms (clipboard: {}ms, ai: {}ms)",
-        started_at.elapsed().as_millis(),
-        clipboard_ms,
-        ai_ms
-    );
-
-    Ok(())
+    execute_transform(
+        app,
+        api_key,
+        provider,
+        model,
+        custom_base_url,
+        trigger,
+        show_done_toast,
+        |text| {
+            ai_client::get_prompt(command, param, text)
+                .with_context(|| format!("Unknown command: {command}"))
+        },
+    )
+    .await
 }
 
-/// Execute replacement with a custom instruction prompt.
-#[allow(clippy::too_many_arguments)] // Public trigger boundary keeps provider configuration explicit.
+/// Execute a rewrite with a user-defined instruction.
+#[allow(clippy::too_many_arguments)]
 pub async fn execute_custom_replacement(
     app: &AppHandle,
     api_key: &str,
@@ -252,127 +292,81 @@ pub async fn execute_custom_replacement(
     trigger: &str,
     show_done_toast: bool,
 ) -> Result<()> {
+    execute_transform(
+        app,
+        api_key,
+        provider,
+        model,
+        custom_base_url,
+        trigger,
+        show_done_toast,
+        |text| Ok(ai_client::get_custom_prompt(system_prompt, text)),
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn execute_transform(
+    app: &AppHandle,
+    api_key: &str,
+    provider: &str,
+    model: &str,
+    custom_base_url: &str,
+    trigger: &str,
+    show_done_toast: bool,
+    build_prompt: impl FnOnce(&str) -> Result<String>,
+) -> Result<()> {
     let started_at = Instant::now();
     if active_target_is_protected(app) {
         bail!("Flick will not transform text in a protected app or password field")
     }
-    let original_target = crate::active_target::get()
+    let original_target = active_target::get()
         .context("Flick could not verify the active app before transforming text")?;
-
-    // Step 1: Save current clipboard
-    let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
-    let original_clipboard = snapshot_clipboard(&mut clipboard)?;
-
-    // Step 2-3: Select and copy
-    let selected_text = match select_and_copy().await {
-        Ok(text) => text,
-        Err(e) => {
-            restore_clipboard(&original_clipboard);
-            bail!("Failed to select and copy text: {}", e);
-        }
-    };
-    let clipboard_ms = started_at.elapsed().as_millis();
-
-    if selected_text.trim().is_empty() {
-        restore_clipboard(&original_clipboard);
-        bail!("No text found to transform");
-    }
-
-    // Step 4: Strip trigger
-    let clean_text = selected_text
-        .trim_end()
-        .strip_suffix(trigger)
-        .unwrap_or(&selected_text)
-        .trim()
-        .to_string();
-
-    if clean_text.is_empty() {
-        restore_clipboard(&original_clipboard);
-        bail!("No text found after stripping trigger");
-    }
-
-    // Step 5: Emit transforming
+    let selected_text = capture_text(&original_target, true).await?;
+    // capture_text restores the clipboard before the request starts, so a
+    // slow provider cannot overwrite something copied meanwhile.
+    let clean_text = transformation_source(&selected_text, trigger)?;
+    let prompt = build_prompt(clean_text)?;
     let _ = app.emit("flick://transforming", ());
-
-    // Step 6-7: Build the custom prompt and call API.
-    let prompt = ai_client::get_custom_prompt(system_prompt, &clean_text);
-
     let transformed =
-        match transform_with_provider(api_key, provider, model, custom_base_url, &prompt).await {
-            Ok(text) => text,
-            Err(e) => {
-                let _ = app.emit(
-                    "flick://error",
-                    serde_json::json!({"message": format!("API error: {}", e)}),
-                );
-                restore_clipboard(&original_clipboard);
-                bail!("API transform failed: {}", e);
-            }
-        };
-    let ai_ms = started_at
-        .elapsed()
-        .as_millis()
-        .saturating_sub(clipboard_ms);
-
+        transform_with_provider(api_key, provider, model, custom_base_url, &prompt).await?;
     crate::history::remember_result(app, &transformed);
     if active_target_is_protected(app) {
-        restore_clipboard(&original_clipboard);
         bail!("Flick will not paste into a protected app or password field. Use Copy last result to recover the completed text.")
     }
-    if let Err(error) = verify_original_target(&original_target) {
-        restore_clipboard(&original_clipboard);
-        return Err(error);
+    verify_original_target(&original_target)?;
+    let current_selection = capture_text(&original_target, false).await
+        .context("The text selection changed while the result was being prepared. Use Copy last result to recover the completed text.")?;
+    if current_selection != selected_text {
+        bail!("The selected text changed while Flick was working. Nothing was replaced; use Copy last result to recover the completed text.");
     }
-
-    // Step 8: Set clipboard
-    {
-        let mut cb = match Clipboard::new() {
-            Ok(clipboard) => clipboard,
-            Err(error) => {
-                restore_clipboard(&original_clipboard);
-                return Err(error).context("Failed to access clipboard for transformed text");
-            }
-        };
-        // Keep the completed result available for persistent history only
-        // after the guarded paste succeeds below.
-        if let Err(error) = cb.set_text(transformed.clone()) {
-            restore_clipboard(&original_clipboard);
-            return Err(error).context("Failed to set transformed text to clipboard");
-        }
-    }
-
-    // Step 9: Paste
-    if let Err(e) = simulate_paste().await {
-        restore_clipboard(&original_clipboard);
-        let _ = app.emit(
-            "flick://error",
-            serde_json::json!({"message": "Failed to paste"}),
-        );
-        bail!("Failed to paste: {}", e);
-    }
-
-    // Step 10: Wait briefly so the paste completes before restoring clipboard.
-    sleep(CLIPBOARD_RESTORE_DELAY).await;
-
-    // Step 11: Restore clipboard
-    restore_clipboard(&original_clipboard);
+    paste_text_in_target(&transformed, &original_target).await?;
     let _ = crate::history::record(app, "transform", &transformed);
-
-    // Step 12: Always end the progress state; success confirmation is optional.
-    if show_done_toast {
-        let _ = app.emit("flick://done", ());
-    } else {
-        let _ = app.emit("flick://transform-finished", ());
-    }
-
-    log::info!(
-        "Custom replacement completed in {}ms (clipboard: {}ms, ai: {}ms)",
-        started_at.elapsed().as_millis(),
-        clipboard_ms,
-        ai_ms
+    let _ = app.emit(
+        if show_done_toast {
+            "flick://done"
+        } else {
+            "flick://transform-finished"
+        },
+        (),
     );
-
+    log::info!(
+        "Replacement completed in {}ms",
+        started_at.elapsed().as_millis()
+    );
     Ok(())
+}
+
+fn transformation_source<'a>(selected: &'a str, trigger: &str) -> Result<&'a str> {
+    // A failed copy or a changed field must never send unrelated clipboard
+    // contents to the provider just because the trigger fired earlier.
+    let text = selected.trim_end().strip_suffix(trigger)
+        .context("The trigger was not found in the focused text. Flick did not send or replace anything.")?
+        .trim();
+    if text.is_empty() {
+        bail!("No text found after stripping trigger");
+    }
+    Ok(text)
 }
 
 async fn transform_with_provider(
@@ -392,62 +386,86 @@ async fn transform_with_provider(
     }
 }
 
-/// Copy the currently selected text without altering the active selection.
+/// Capture only the user's explicit selection, without selecting the field.
 pub async fn capture_selected_text() -> Result<String> {
-    let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
-    let original_clipboard = snapshot_clipboard(&mut clipboard)?;
-    // Composer privacy contract: capture an explicit selection only. Unlike
-    // the rewrite pipeline, do not select the entire field here.
-    let selected = copy_existing_selection().await;
-    restore_clipboard(&original_clipboard);
-    selected
+    let target = active_target::get().context("Flick could not verify the source app")?;
+    capture_text(&target, false).await
 }
 
-async fn copy_existing_selection() -> Result<String> {
-    let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
-    // A sentinel lets us distinguish “copy did not change the clipboard” from
-    // a valid selection that happens to match what was copied previously.
-    let sentinel = format!("__flick_selection_probe_{}__", std::process::id());
-    clipboard
-        .set_text(sentinel.clone())
-        .context("Failed to prepare clipboard")?;
-    simulate_copy().await?;
-    sleep(CLIPBOARD_COPY_DELAY).await;
-    let copied = Clipboard::new()
-        .context("Failed to read copied selection")?
-        .get_text()
-        .context("The selected content is not text")?;
-    if copied == sentinel || copied.trim().is_empty() {
-        bail!("No text selection was copied");
+async fn capture_text(target: &active_target::ActiveTarget, select_all: bool) -> Result<String> {
+    let mut transaction = ClipboardTransaction::begin()?;
+    let sentinel = format!(
+        "__flick_selection_probe_{}_{}__",
+        std::process::id(),
+        COPY_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    );
+    transaction.set_text(sentinel.clone())?;
+    sleep(KEY_SETTLE_DELAY).await;
+    verify_original_target(target)?;
+    if select_all {
+        simulate_key_chord('a')?;
+        sleep(KEY_SETTLE_DELAY).await;
+        verify_original_target(target)?;
     }
-    Ok(copied)
+    simulate_key_chord('c')?;
+    let started = Instant::now();
+    loop {
+        sleep(CLIPBOARD_COPY_DELAY).await;
+        match transaction.get_text() {
+            Ok(text) if text != sentinel => {
+                verify_original_target(target)?;
+                transaction.claim_text(text.clone());
+                transaction.finish()?;
+                if text.trim().is_empty() {
+                    bail!("No text selection was copied");
+                }
+                return Ok(text);
+            }
+            Ok(_)
+            | Err(arboard::Error::ClipboardOccupied)
+            | Err(arboard::Error::ContentNotAvailable) => {}
+            Err(error) => return Err(error).context("Could not read the selected text"),
+        }
+        if started.elapsed() >= CLIPBOARD_COPY_TIMEOUT {
+            bail!("No text selection was copied. Select editable text and try again.");
+        }
+    }
 }
 
-/// Place text in the previously active target and restore the user's clipboard.
-/// Callers must ask for explicit user confirmation before invoking this.
+/// Paste into the current target, detecting a focus change during preparation.
 pub async fn paste_text_transaction(text: &str) -> Result<()> {
-    let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
-    let original_clipboard = snapshot_clipboard(&mut clipboard)?;
-    clipboard
-        .set_text(text.to_string())
-        .context("Failed to set clipboard text")?;
-    let paste_result = simulate_paste().await;
-    sleep(CLIPBOARD_RESTORE_DELAY).await;
-    restore_clipboard(&original_clipboard);
-    paste_result
+    let target = active_target::get().context("Flick could not verify the target app")?;
+    paste_text_in_target(text, &target).await
 }
 
-/// Re-paste the text representation currently on the clipboard. This is a
-/// deliberate formatting conversion: rich clipboard formats are not pasted.
+async fn paste_text_in_target(text: &str, target: &active_target::ActiveTarget) -> Result<()> {
+    let mut transaction = ClipboardTransaction::begin()?;
+    transaction.set_text(text.to_owned())?;
+    verify_original_target(target)?;
+    simulate_key_chord('v')?;
+    sleep(CLIPBOARD_RESTORE_DELAY).await;
+    transaction.finish().context(
+        "Text was pasted, but Flick could not restore the clipboard. Do not insert the text again.",
+    )
+}
+
+/// Paste the plain text representation with the same transaction guarantees.
 pub async fn paste_plain_text_from_clipboard() -> Result<()> {
-    let text = Clipboard::new()
-        .context("Failed to access clipboard")?
+    let target = active_target::get().context("Flick could not verify the target app")?;
+    let mut transaction = ClipboardTransaction::begin()?;
+    let text = transaction
         .get_text()
         .context("Clipboard does not contain text to paste")?;
     if text.is_empty() {
         bail!("Clipboard does not contain text to paste");
     }
-    paste_text_transaction(&text).await
+    transaction.set_text(text)?;
+    verify_original_target(&target)?;
+    simulate_key_chord('v')?;
+    sleep(CLIPBOARD_RESTORE_DELAY).await;
+    transaction.finish().context(
+        "Text was pasted, but Flick could not restore the clipboard. Do not paste the text again.",
+    )
 }
 
 /// Submit the focused target only after an explicit per-app opt-in.
@@ -461,101 +479,27 @@ pub async fn submit_current_target() -> Result<()> {
     Ok(())
 }
 
-async fn select_and_copy() -> Result<String> {
-    let mut enigo = Enigo::new(&Settings::default())
-        .map_err(|e| anyhow::anyhow!("Failed to create Enigo instance: {:?}", e))?;
-
-    // Small delay to ensure previous key events are processed
-    sleep(KEY_SETTLE_DELAY).await;
-
-    // Ctrl+A - select all text in the active input field
-    enigo
-        .key(platform_modifier(), Direction::Press)
-        .map_err(|e| anyhow::anyhow!("Key press failed: {:?}", e))?;
-    enigo
-        .key(Key::Unicode('a'), Direction::Click)
-        .map_err(|e| anyhow::anyhow!("Key press failed: {:?}", e))?;
-    enigo
-        .key(platform_modifier(), Direction::Release)
-        .map_err(|e| anyhow::anyhow!("Key release failed: {:?}", e))?;
-
-    sleep(KEY_SETTLE_DELAY).await;
-
-    // Ctrl+C - copy selected text
-    enigo
-        .key(platform_modifier(), Direction::Press)
-        .map_err(|e| anyhow::anyhow!("Key press failed: {:?}", e))?;
-    enigo
-        .key(Key::Unicode('c'), Direction::Click)
-        .map_err(|e| anyhow::anyhow!("Key press failed: {:?}", e))?;
-    enigo
-        .key(platform_modifier(), Direction::Release)
-        .map_err(|e| anyhow::anyhow!("Key release failed: {:?}", e))?;
-
-    // Wait for clipboard to update
-    sleep(CLIPBOARD_COPY_DELAY).await;
-
-    // Read clipboard content
-    let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
-    let text = clipboard
-        .get_text()
-        .context("The focused selection is not text")?;
-    Ok(text)
-}
-
-/// Simulate Ctrl+V (paste).
-async fn simulate_paste() -> Result<()> {
+fn simulate_key_chord(key: char) -> Result<()> {
     #[cfg(target_os = "linux")]
-    if try_linux_key_chord("v") {
-        sleep(PASTE_DELAY).await;
-        return Ok(());
-    }
-    let mut enigo = Enigo::new(&Settings::default())
-        .map_err(|e| anyhow::anyhow!("Failed to create Enigo instance: {:?}", e))?;
-
-    enigo
-        .key(platform_modifier(), Direction::Press)
-        .map_err(|e| anyhow::anyhow!("Key press failed: {:?}", e))?;
-    enigo
-        .key(Key::Unicode('v'), Direction::Click)
-        .map_err(|e| anyhow::anyhow!("Key press failed: {:?}", e))?;
-    enigo
-        .key(platform_modifier(), Direction::Release)
-        .map_err(|e| anyhow::anyhow!("Key release failed: {:?}", e))?;
-
-    sleep(PASTE_DELAY).await;
-    Ok(())
-}
-
-async fn simulate_copy() -> Result<()> {
-    #[cfg(target_os = "linux")]
-    if try_linux_key_chord("c") {
-        sleep(KEY_SETTLE_DELAY).await;
+    if try_linux_key_chord(&key.to_string()) {
         return Ok(());
     }
     let mut enigo = Enigo::new(&Settings::default())
         .map_err(|error| anyhow::anyhow!("Failed to create keyboard input: {error:?}"))?;
     enigo
         .key(platform_modifier(), Direction::Press)
-        .map_err(|error| anyhow::anyhow!("Failed to hold copy modifier: {error:?}"))?;
-    enigo
-        .key(Key::Unicode('c'), Direction::Click)
-        .map_err(|error| anyhow::anyhow!("Failed to copy selection: {error:?}"))?;
-    enigo
-        .key(platform_modifier(), Direction::Release)
-        .map_err(|error| anyhow::anyhow!("Failed to release copy modifier: {error:?}"))?;
-    sleep(KEY_SETTLE_DELAY).await;
+        .map_err(|error| anyhow::anyhow!("Failed to hold shortcut modifier: {error:?}"))?;
+    // Release the modifier even if injecting the character fails.
+    let pressed = enigo.key(Key::Unicode(key), Direction::Click);
+    let released = enigo.key(platform_modifier(), Direction::Release);
+    pressed.map_err(|error| anyhow::anyhow!("Failed to send shortcut: {error:?}"))?;
+    released.map_err(|error| anyhow::anyhow!("Failed to release shortcut modifier: {error:?}"))?;
     Ok(())
 }
 
-/// Prefer the standard display-server helpers on Linux when they are
-/// installed. They are more reliable than synthetic input under restrictive
-/// Wayland compositors. A failed/missing helper is deliberately non-fatal: the
-/// cross-platform input backend remains the fallback.
 #[cfg(target_os = "linux")]
 fn try_linux_key_chord(key: &str) -> bool {
     use std::process::Command;
-
     let chord = format!("ctrl+{key}");
     let run = |program: &str, args: &[&str]| {
         Command::new(program)
@@ -563,36 +507,58 @@ fn try_linux_key_chord(key: &str) -> bool {
             .status()
             .is_ok_and(|status| status.success())
     };
-    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
-        if run("wtype", &["-M", "ctrl", "-P", key, "-m", "ctrl"]) || run("dotool", &["key", &chord])
-        {
-            return true;
-        }
-    }
-    if std::env::var_os("DISPLAY").is_some() && run("xdotool", &["key", "--clearmodifiers", &chord])
+    if std::env::var_os("WAYLAND_DISPLAY").is_some()
+        && run("wtype", &["-M", "ctrl", "-P", key, "-p", key, "-m", "ctrl"])
     {
         return true;
     }
-    false
+    std::env::var_os("DISPLAY").is_some() && run("xdotool", &["key", "--clearmodifiers", &chord])
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn target(app_name: &str, process_path: &str) -> crate::active_target::ActiveTarget {
-        crate::active_target::ActiveTarget {
-            app_name: app_name.into(),
-            title: String::new(),
-            process_path: process_path.into(),
-        }
+    #[test]
+    fn stale_clipboard_is_never_transformed() {
+        assert!(transformation_source("private clipboard text", "!fix").is_err());
+        assert_eq!(
+            transformation_source("rewrite this !fix ", "!fix").unwrap(),
+            "rewrite this"
+        );
+        assert!(transformation_source("!fix", "!fix").is_err());
     }
 
     #[test]
-    fn guarded_replacement_requires_the_original_app() {
-        let original = target("slack", "c:/apps/slack.exe");
-        assert!(same_target(&original, &target("slack", "c:/apps/slack.exe")));
-        assert!(!same_target(&original, &target("discord", "c:/apps/discord.exe")));
-        assert!(!same_target(&original, &target("slack", "c:/other/slack.exe")));
+    fn restoration_preserves_new_user_copies_including_identical_text() {
+        assert!(still_owns_clipboard(
+            "temporary",
+            Some("temporary"),
+            Some(10),
+            Some(10)
+        ));
+        assert!(!still_owns_clipboard(
+            "temporary",
+            Some("new copy"),
+            Some(10),
+            Some(11)
+        ));
+        assert!(!still_owns_clipboard(
+            "temporary",
+            Some("temporary"),
+            Some(10),
+            Some(11)
+        ));
+        assert!(!still_owns_clipboard("temporary", None, None, None));
+    }
+
+    #[test]
+    fn concurrent_clipboard_transactions_refuse_to_interleave() {
+        // Hold the production lock without initializing a native handle.
+        // Both transaction setup and explicit Copy must refuse before touching
+        // the system clipboard.
+        let _first = CLIPBOARD.try_lock().unwrap();
+        assert!(clipboard_access().is_err());
+        assert!(copy_text_to_clipboard("must not be copied").is_err());
     }
 }

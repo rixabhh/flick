@@ -81,7 +81,12 @@ impl LocalModelTranscriber {
             .local_model_path
             .as_deref()
             .context("Download a local speech model before dictating")?;
-        transcribe_local_whisper(&request.audio, &request.language, request.translate_to_english, path)
+        transcribe_local_whisper(
+            &request.audio,
+            &request.language,
+            request.translate_to_english,
+            path,
+        )
     }
 }
 
@@ -99,7 +104,11 @@ pub(crate) fn transcribe_local_whisper(
     let source_language = (language != "auto").then(|| language.to_string());
     let translating = translate_to_english && source_language.as_deref() != Some("en");
     let options = RunOptions {
-        task: if translating { Task::Translate } else { Task::Transcribe },
+        task: if translating {
+            Task::Translate
+        } else {
+            Task::Transcribe
+        },
         language: source_language,
         target_language: translating.then(|| "en".to_string()),
         ..Default::default()
@@ -123,7 +132,9 @@ fn initialize_local_engine() -> Result<()> {
         // need the unit success value, while a failed initialization remains
         // cached and reported consistently on every later dictation attempt.
         .map(|_| ())
-        .map_err(|error| anyhow::anyhow!("Could not initialize local transcription engine: {error}"))
+        .map_err(|error| {
+            anyhow::anyhow!("Could not initialize local transcription engine: {error}")
+        })
 }
 
 #[derive(Debug, Deserialize)]
@@ -136,7 +147,8 @@ fn cloud_transcription_url(base_url: &str) -> Result<Url> {
     if base_url.is_empty() {
         bail!("Enter a cloud transcription endpoint before dictating");
     }
-    let mut url = Url::parse(base_url).context("Cloud transcription endpoint must be a valid URL")?;
+    let mut url =
+        Url::parse(base_url).context("Cloud transcription endpoint must be a valid URL")?;
     let host = url.host_str().unwrap_or_default();
     let local_http = url.scheme() == "http" && matches!(host, "localhost" | "127.0.0.1" | "::1");
     if url.scheme() != "https" && !local_http {
@@ -244,7 +256,9 @@ pub fn provider_info(id: &str) -> Result<DictationProviderInfo> {
     available_providers()
         .into_iter()
         .find(|provider| provider.id == id)
-        .ok_or_else(|| anyhow::anyhow!("Dictation provider '{id}' is not available in this version of Flick"))
+        .ok_or_else(|| {
+            anyhow::anyhow!("Dictation provider '{id}' is not available in this version of Flick")
+        })
 }
 
 /// Route transcription through the configured provider. No fallback is used.
@@ -255,13 +269,17 @@ pub async fn transcribe(
     cloud_model: String,
 ) -> Result<String> {
     match provider_id.as_str() {
-        LOCAL_WHISPER_PROVIDER_ID => tokio::task::spawn_blocking(move || LocalModelTranscriber::transcribe(request))
-            .await
-            .context("Local transcription task failed")?,
+        LOCAL_WHISPER_PROVIDER_ID => {
+            tokio::task::spawn_blocking(move || LocalModelTranscriber::transcribe(request))
+                .await
+                .context("Local transcription task failed")?
+        }
         CLOUD_OPENAI_COMPATIBLE_PROVIDER_ID => {
             transcribe_cloud_openai_compatible(request, cloud_base_url, cloud_model).await
         }
-        unsupported => bail!("Dictation provider '{unsupported}' is not available in this version of Flick"),
+        unsupported => {
+            bail!("Dictation provider '{unsupported}' is not available in this version of Flick")
+        }
     }
 }
 
@@ -291,7 +309,9 @@ mod tests {
         assert!(cloud_transcription_url("http://example.com/v1").is_err());
         assert!(cloud_transcription_url("http://localhost:8080/v1").is_ok());
         assert_eq!(
-            cloud_transcription_url("https://api.example.com/v1/").unwrap().as_str(),
+            cloud_transcription_url("https://api.example.com/v1/")
+                .unwrap()
+                .as_str(),
             "https://api.example.com/v1/audio/transcriptions"
         );
     }

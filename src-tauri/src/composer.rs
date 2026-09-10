@@ -3,33 +3,28 @@
 //! The composer deliberately captures only an explicit selection. It stores no
 //! context or drafts: the Svelte window owns that short-lived state.
 
-use arboard::Clipboard;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::time::{sleep, Duration};
 
-use crate::{active_target, ai_client, key_hook, keychain, replacer, AppState, ComposerTargetState};
+use crate::{
+    active_target, ai_client, key_hook, keychain, replacer, AppState, ComposerTargetState,
+};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TargetIdentity {
-    app_name: String,
-    process_path: String,
-}
+pub type TargetIdentity = active_target::ActiveTarget;
 
 fn foreground_target() -> Result<TargetIdentity, String> {
-    let window = active_target::get()
-        .ok_or_else(|| "Flick could not verify the active app".to_string())?;
+    let window =
+        active_target::get().ok_or_else(|| "Flick could not verify the active app".to_string())?;
+    // Window titles can contain a document or conversation name; retain only
+    // the non-content identity needed to guard a later insertion.
     Ok(TargetIdentity {
-        app_name: window.app_name,
-        process_path: window.process_path,
+        title: String::new(),
+        ..window
     })
 }
 
 fn same_target(expected: &TargetIdentity, current: &TargetIdentity) -> bool {
-    !expected.app_name.is_empty()
-        && expected.app_name == current.app_name
-        && (expected.process_path.is_empty()
-            || current.process_path.is_empty()
-            || expected.process_path == current.process_path)
+    active_target::matches_target(expected, current)
 }
 
 fn remember_target(app: &AppHandle, target: Option<TargetIdentity>) {
@@ -52,22 +47,31 @@ fn target_is_still_appropriate(app: &AppHandle) -> Result<bool, String> {
 }
 
 fn current_target_is_protected(app: &AppHandle) -> bool {
-    let disabled_apps = app
-        .try_state::<AppState>()
-        .and_then(|state| {
-            state
-                .config
-                .lock()
-                .ok()
-                .map(|config| config.disabled_apps.clone())
-        })
-        .unwrap_or_default();
-    key_hook::active_app_is_protected(&disabled_apps)
+    let disabled_apps = app.try_state::<AppState>().and_then(|state| {
+        state
+            .config
+            .lock()
+            .ok()
+            .map(|config| config.disabled_apps.clone())
+    });
+    // Missing privacy settings must not silently remove the user's protected
+    // apps. Capture and insertion can be retried after settings recover.
+    disabled_apps
+        .map(|disabled| key_hook::active_app_is_protected(&disabled))
+        .unwrap_or(true)
 }
 
 /// Captures an explicit selection before the composer window is shown. Drafts
 /// and context remain in the renderer only for the lifetime of that window.
 pub async fn open_from_shortcut(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("composer") {
+        if window.is_visible().unwrap_or(false) {
+            // Repeating the shortcut while drafting should bring back that
+            // draft, not capture Flick's own textarea and overwrite context.
+            let _ = window.set_focus();
+            return;
+        }
+    }
     // Capture identity before Flick's own window is visible. The selected text
     // itself remains renderer-only and is deliberately not stored here. This
     // check belongs here—not only in the global hook—because CLI and tray
@@ -94,7 +98,8 @@ pub async fn open_from_shortcut(app: &AppHandle) {
         // composer session. Supplying the reason lets users recover from a
         // clipboard or selection problem without guessing why the draft opens
         // empty.
-        let _ = app.emit(
+        let _ = app.emit_to(
+            "composer",
             "flick://composer-context",
             serde_json::json!({"context": context, "error": capture_error}),
         );
@@ -112,7 +117,9 @@ pub async fn capture_reply_context(app: AppHandle) -> Result<String, String> {
     let was_visible = if let Some(window) = app.get_webview_window("composer") {
         let visible = window.is_visible().unwrap_or(false);
         if visible {
-            let _ = window.hide();
+            window
+                .hide()
+                .map_err(|error| format!("Could not return to the source app: {error}"))?;
             sleep(Duration::from_millis(120)).await;
         }
         visible
@@ -120,6 +127,7 @@ pub async fn capture_reply_context(app: AppHandle) -> Result<String, String> {
         false
     };
     if current_target_is_protected(&app) {
+        remember_target(&app, None);
         if was_visible {
             restore_composer(&app);
         }
@@ -132,6 +140,7 @@ pub async fn capture_reply_context(app: AppHandle) -> Result<String, String> {
     let selection = match replacer::capture_selected_text().await {
         Ok(selection) => selection,
         Err(error) => {
+            remember_target(&app, None);
             if was_visible {
                 restore_composer(&app);
             }
@@ -221,7 +230,9 @@ pub async fn insert_reply(app: AppHandle, draft: String) -> Result<(), String> {
     // managers, hiding restores the previously active target; pasting while
     // the composer owns focus would incorrectly insert into Flick itself.
     if let Some(window) = app.get_webview_window("composer") {
-        let _ = window.hide();
+        window
+            .hide()
+            .map_err(|error| format!("Could not return to the target app: {error}"))?;
     }
     sleep(Duration::from_millis(120)).await;
     if current_target_is_protected(&app) {
@@ -262,6 +273,7 @@ mod tests {
         let expected = TargetIdentity {
             app_name: "slack".into(),
             process_path: "c:/apps/slack.exe".into(),
+            ..TargetIdentity::default()
         };
         assert!(same_target(&expected, &expected));
         assert!(!same_target(
@@ -269,6 +281,7 @@ mod tests {
             &TargetIdentity {
                 app_name: "discord".into(),
                 process_path: "c:/apps/discord.exe".into(),
+                ..TargetIdentity::default()
             }
         ));
     }
@@ -279,7 +292,6 @@ pub async fn copy_reply(draft: String) -> Result<(), String> {
     if draft.trim().is_empty() {
         return Err("There is no draft to copy.".into());
     }
-    Clipboard::new()
-        .and_then(|mut clipboard| clipboard.set_text(draft))
+    replacer::copy_text_to_clipboard(&draft)
         .map_err(|error| format!("Could not copy draft: {error}"))
 }

@@ -16,11 +16,14 @@
   let inserting = $state(false);
   let error = $state("");
   let copied = $state(false);
+  let copying = $state(false);
   let draftSignature = $state("");
   let providerNotice = $state("");
   let language = $state("en");
   let contextInput = $state();
   let generateShortcut = $state("⌘ ↵");
+  let session = 0;
+  let copiedTimer;
 
   const t = (key) => translate(language, key);
   const toneValue = () => tone === "Custom" ? (customTone.trim() || "friendly") : tone.toLowerCase();
@@ -28,39 +31,58 @@
   const draftMatchesRequest = () => Boolean(draft) && draftSignature === requestSignature();
 
   async function captureSelection() {
+    if (capturing || loading || inserting) return;
+    const currentSession = session;
+    const previousContext = context;
     error = "";
     capturing = true;
-    try { context = await invoke("capture_reply_context"); }
-    catch (message) { error = String(message); }
-    finally { capturing = false; }
+    try {
+      const selection = await invoke("capture_reply_context");
+      if (currentSession === session && context === previousContext) context = selection;
+    }
+    catch (message) { if (currentSession === session) error = String(message); }
+    finally { if (currentSession === session) capturing = false; }
   }
 
   async function generate() {
-    if (!context.trim() || !instruction.trim()) return;
+    if (loading || capturing || inserting || !context.trim() || !instruction.trim()) return;
+    const currentSession = session;
     error = "";
+    copied = false;
     loading = true;
     const signature = requestSignature();
     try {
-      draft = await invoke("generate_reply", { context, tone: toneValue(), instruction });
+      const result = await invoke("generate_reply", { context, tone: toneValue(), instruction });
+      if (currentSession !== session) return;
+      draft = result;
       // A user can keep typing while the provider is responding. Associate
       // the result with the exact request that left Flick, not whatever is in
       // the fields when the promise later resolves.
       draftSignature = signature;
     }
-    catch (message) { error = String(message); }
-    finally { loading = false; }
+    catch (message) { if (currentSession === session) error = String(message); }
+    finally { if (currentSession === session) loading = false; }
   }
 
   async function copy() {
+    if (copying || loading || inserting || !draft) return;
+    const currentSession = session;
+    const text = draft;
     error = "";
+    copying = true;
     try {
-      await invoke("copy_reply", { draft });
+      await invoke("copy_reply", { draft: text });
+      if (currentSession !== session || text !== draft) return;
       copied = true;
-      setTimeout(() => copied = false, 1600);
-    } catch (message) { error = String(message); }
+      clearTimeout(copiedTimer);
+      copiedTimer = setTimeout(() => copied = false, 1600);
+    } catch (message) { if (currentSession === session) error = String(message); }
+    finally { if (currentSession === session) copying = false; }
   }
 
   async function insert() {
+    if (inserting || capturing || loading || copying) return;
+    const currentSession = session;
     error = "";
     if (!draftMatchesRequest()) {
       error = t("composer.staleError");
@@ -68,8 +90,21 @@
     }
     inserting = true;
     try { await invoke("insert_reply", { draft }); }
-    catch (message) { error = `${message} Your draft is still here; use Copy instead.`; }
-    finally { inserting = false; }
+    catch (message) { if (currentSession === session) error = `${message} ${t("composer.insertRecovery")}`; }
+    finally { if (currentSession === session) inserting = false; }
+  }
+
+  function invalidateSession() {
+    session += 1;
+    loading = capturing = inserting = copying = copied = false;
+    clearTimeout(copiedTimer);
+  }
+
+  async function close() {
+    try {
+      await getCurrentWindow().hide();
+      invalidateSession();
+    } catch (message) { error = String(message); }
   }
 
   function handleKeydown(event) {
@@ -77,7 +112,7 @@
       event.preventDefault();
       generate();
     }
-    if (event.key === "Escape" && !loading && !capturing && !inserting) getCurrentWindow().hide();
+    if (event.key === "Escape" && !inserting) void close();
   }
 
   function describeProvider(config) {
@@ -101,19 +136,21 @@
     // I/O for the privacy copy.
     void (async () => {
       const dispose = await listen("flick://composer-context", (event) => {
+        invalidateSession();
         const payload = event.payload;
         // Support the previous string payload while the backend and renderer
         // update together. The object form preserves a meaningful recovery
         // reason when selection capture could not safely complete.
         context = typeof payload === "string" ? payload : String(payload?.context || "");
         draft = "";
+        draftSignature = "";
         error = typeof payload === "object" && payload?.error
           ? String(payload.error)
           : context ? "" : t("composer.noSelection");
       });
       if (disposed) dispose();
       else unlisten = dispose;
-    })();
+    })().catch((message) => { if (!disposed) error = String(message); });
     void (async () => {
       try {
         const config = await invoke("get_config");
@@ -123,24 +160,24 @@
         providerNotice = t("composer.providerFallback");
       }
     })();
-    return () => { disposed = true; unlisten(); clearTimeout(focusTimer); };
+    return () => { disposed = true; invalidateSession(); unlisten(); clearTimeout(focusTimer); };
   });
 </script>
 
-<main class="composer" role="dialog" aria-modal="true" aria-labelledby="composer-title" aria-busy={loading || capturing || inserting} onkeydown={handleKeydown}>
+<div class="composer" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="composer-title" aria-busy={loading || capturing || inserting} onkeydown={handleKeydown}>
   <section class="window-surface">
     <header data-tauri-drag-region>
       <div class="title-group" data-tauri-drag-region>
         <span class="composer-mark" aria-hidden="true">↗</span>
         <div data-tauri-drag-region><span class="eyebrow">FLICK REPLY</span><h1 id="composer-title">{t("composer.title")}</h1></div>
       </div>
-      <button class="icon" aria-label={t("composer.close")} onclick={() => getCurrentWindow().hide()}>×</button>
+      <button class="icon" aria-label={t("composer.close")} onclick={close} disabled={inserting}>×</button>
     </header>
 
     <p class="privacy"><span aria-hidden="true">⌁</span><span>{t("composer.privacy")} {providerNotice}</span></p>
 
     <section class="field-group">
-      <div class="field-label"><label for="context">{t("composer.context")}</label><button class="capture" onclick={captureSelection} disabled={capturing}>{capturing ? t("composer.capturing") : t("composer.capture")}</button></div>
+      <div class="field-label"><label for="context">{t("composer.context")}</label><button class="capture" onclick={captureSelection} disabled={capturing || loading || inserting}>{capturing ? t("composer.capturing") : t("composer.capture")}</button></div>
       <textarea id="context" class="context" bind:this={contextInput} bind:value={context} placeholder={t("composer.contextPlaceholder")}></textarea>
     </section>
 
@@ -157,7 +194,7 @@
       <textarea id="intent" class="intent" bind:value={instruction} placeholder={t("composer.intentPlaceholder")}></textarea>
     </section>
 
-    <button class="generate" onclick={generate} disabled={loading || !context.trim() || !instruction.trim()}>
+    <button class="generate" onclick={generate} disabled={loading || capturing || inserting || !context.trim() || !instruction.trim()}>
       {#if loading}<span class="mini-spinner" aria-hidden="true"></span>{/if}
       <span>{loading ? t("composer.drafting") : draft ? t("composer.regenerate") : t("composer.generate")}</span>
     </button>
@@ -166,12 +203,12 @@
     {#if draft}
       <section class="draft-card">
         <div class="field-label"><label for="draft">{t("composer.draft")}</label>{#if draftMatchesRequest()}<span class="ready"><i></i> {t("composer.ready")}</span>{:else}<span class="stale" role="status">{t("composer.stale")}</span>{/if}</div>
-        <textarea id="draft" class="draft" bind:value={draft}></textarea>
-        <div class="actions"><button class="secondary" onclick={copy}>{copied ? t("composer.copied") : t("composer.copy")}</button><button class="insert" onclick={insert} disabled={inserting || !draftMatchesRequest()} title={draftMatchesRequest() ? undefined : t("composer.staleTooltip")}>{inserting ? t("composer.inserting") : t("composer.insert")}</button></div>
+        <textarea id="draft" class="draft" bind:value={draft} readonly={loading || inserting} oninput={() => copied = false}></textarea>
+        <div class="actions"><button class="secondary" onclick={copy} disabled={copying || loading || inserting}>{copied ? t("composer.copied") : t("composer.copy")}</button><button class="insert" onclick={insert} disabled={inserting || copying || capturing || loading || !draftMatchesRequest()} title={draftMatchesRequest() ? undefined : t("composer.staleTooltip")}>{inserting ? t("composer.inserting") : t("composer.insert")}</button></div>
       </section>
     {/if}
   </section>
-</main>
+</div>
 
 <style>
   .composer { height:100vh; overflow:auto; padding:14px; color:#f5f7fb; background:radial-gradient(circle at 20% -10%,rgba(122,158,255,.16),transparent 40%),linear-gradient(145deg,#171a22,#0e1015); font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",system-ui,sans-serif; }

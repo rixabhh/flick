@@ -7,11 +7,13 @@
   let state = $state("recording");
   let language = $state("en");
   let cloudTranscription = $state(false);
+  let hasSession = false;
   const t = (key) => translate(language, key);
 
   async function refreshPresentationConfig() {
     try {
       const config = await invoke("get_config");
+      if (hasSession) return;
       language = config.app_language === "es" ? "es" : "en";
       cloudTranscription = config.dictation_provider === "cloud-openai-compatible";
     } catch {}
@@ -19,21 +21,28 @@
 
   onMount(() => {
     let disposed = false;
-    let unlisten = () => {};
+    const disposers = [];
     // Listen first: the first dictation shortcut can show this lightweight
     // webview while its presentation preferences are still loading. The
     // transcribing event triggers a refresh below, so provider copy catches up
     // without losing the state transition.
     void (async () => {
+      const disposeSession = await listen("flick://dictation-session", ({ payload }) => {
+        hasSession = true;
+        state = payload.state;
+        language = payload.app_language === "es" ? "es" : "en";
+        cloudTranscription = payload.provider_id === "cloud-openai-compatible";
+      });
+      if (disposed) { disposeSession(); return; }
+      disposers.push(disposeSession);
       const dispose = await listen("flick://dictation-state", (event) => {
         state = String(event.payload || "recording");
-        if (state === "transcribing") void refreshPresentationConfig();
       });
       if (disposed) dispose();
-      else unlisten = dispose;
-    })();
+      else disposers.push(dispose);
+    })().catch(() => {});
     void refreshPresentationConfig();
-    return () => { disposed = true; unlisten(); };
+    return () => { disposed = true; disposers.forEach((dispose) => dispose()); };
   });
 
   const label = () => state === "transcribing"

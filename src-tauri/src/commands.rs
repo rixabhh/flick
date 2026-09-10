@@ -21,29 +21,6 @@ const BUILTIN_TRIGGERS: &[&str] = &[
     "translate",
 ];
 
-fn sync_config_state(app: &AppHandle, cfg: &config::FlickConfig) {
-    if let Some(state) = app.try_state::<crate::AppState>() {
-        // The configuration has already been safely persisted before this
-        // best-effort hot-state update. A poisoned lock must not turn a
-        // recoverable settings save into a desktop-process panic.
-        if let Ok(mut current) = state.config.lock() {
-            *current = cfg.clone();
-        } else {
-            log::warn!("Could not refresh the in-memory Flick configuration after saving");
-        }
-        if let Ok(mut enabled) = state.enabled.lock() {
-            *enabled = cfg.enabled;
-        } else {
-            log::warn!("Could not refresh Flick's in-memory enabled state after saving");
-        }
-        if let Ok(mut triggers) = state.custom_triggers.lock() {
-            *triggers = config::get_custom_trigger_names(cfg);
-        } else {
-            log::warn!("Could not refresh Flick's in-memory custom triggers after saving");
-        }
-    }
-}
-
 fn normalize_trigger(trigger: &str) -> String {
     trigger.trim().trim_start_matches('!').to_lowercase()
 }
@@ -133,8 +110,19 @@ pub async fn get_config(app: AppHandle) -> Result<config::FlickConfig, String> {
 #[tauri::command]
 pub async fn save_config(app: AppHandle, config: config::FlickConfig) -> Result<(), String> {
     config::save_config(&app, &config).map_err(|e| e.to_string())?;
-    sync_config_state(&app, &config);
     Ok(())
+}
+
+#[tauri::command]
+pub async fn update_config_fields(
+    app: AppHandle,
+    patch: serde_json::Value,
+) -> Result<config::FlickConfig, String> {
+    config::update_config(&app, |current| {
+        *current = config::merge_fields(current, patch)?;
+        Ok(())
+    })
+    .map_err(|error| error.to_string())
 }
 
 /// Apply the user's shared pill placement to the hidden floating windows. We
@@ -154,7 +142,9 @@ pub fn position_floating_pills(app: &AppHandle) -> anyhow::Result<()> {
         let monitor = window
             .current_monitor()?
             .or(app.primary_monitor()?)
-            .ok_or_else(|| anyhow::anyhow!("Could not determine a display for Flick's floating pill"))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!("Could not determine a display for Flick's floating pill")
+            })?;
         let monitor_position = monitor.position();
         let monitor_size = monitor.size();
         let window_size = window.outer_size()?;
@@ -169,7 +159,10 @@ pub fn position_floating_pills(app: &AppHandle) -> anyhow::Result<()> {
             "bottom-left" => (left + margin, bottom - height - margin),
             "bottom-right" => (right - width - margin, bottom - height - margin),
             "top-center" => (left + (monitor_size.width as i32 - width) / 2, top + margin),
-            _ => (left + (monitor_size.width as i32 - width) / 2, bottom - height - margin),
+            _ => (
+                left + (monitor_size.width as i32 - width) / 2,
+                bottom - height - margin,
+            ),
         };
         window.set_position(Position::Physical(PhysicalPosition::new(x, y)))?;
     }
@@ -179,10 +172,11 @@ pub fn position_floating_pills(app: &AppHandle) -> anyhow::Result<()> {
 /// Toggle the enabled/disabled state of Flick.
 #[tauri::command]
 pub async fn toggle_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let mut cfg = config::load_config(&app).map_err(|e| e.to_string())?;
-    cfg.enabled = enabled;
-    config::save_config(&app, &cfg).map_err(|e| e.to_string())?;
-    sync_config_state(&app, &cfg);
+    config::update_config(&app, |cfg| {
+        cfg.enabled = enabled;
+        Ok(())
+    })
+    .map_err(|e| e.to_string())?;
 
     log::info!("Flick {}", if enabled { "enabled" } else { "disabled" });
     Ok(())
@@ -195,18 +189,20 @@ pub async fn add_custom_command(
     trigger: String,
     prompt: String,
 ) -> Result<config::CustomCommand, String> {
-    let mut cfg = config::load_config(&app).map_err(|e| e.to_string())?;
     let trigger = normalize_trigger(&trigger);
     let prompt = prompt.trim().to_string();
-    validate_custom_command(&cfg, &trigger, &prompt, None)?;
     let command = config::CustomCommand {
         id: format!("cmd-{}", trigger),
         trigger: trigger.clone(),
         prompt,
     };
-    cfg.custom_commands.push(command.clone());
-    config::save_config(&app, &cfg).map_err(|e| e.to_string())?;
-    sync_config_state(&app, &cfg);
+    config::update_config(&app, |cfg| {
+        validate_custom_command(cfg, &trigger, &command.prompt, None)
+            .map_err(anyhow::Error::msg)?;
+        cfg.custom_commands.push(command.clone());
+        Ok(())
+    })
+    .map_err(|e| e.to_string())?;
 
     log::info!("Custom command added: !{}", trigger);
     Ok(command)
@@ -220,42 +216,42 @@ pub async fn update_custom_command(
     trigger: String,
     prompt: String,
 ) -> Result<(), String> {
-    let mut cfg = config::load_config(&app).map_err(|e| e.to_string())?;
-    let index = cfg
-        .custom_commands
-        .iter()
-        .position(|command| command.id == id)
-        .ok_or_else(|| "Unknown command".to_string())?;
-    let trigger = normalize_trigger(&trigger);
-    let prompt = prompt.trim().to_string();
-    validate_custom_command(&cfg, &trigger, &prompt, Some(&id))?;
-    let id = cfg.custom_commands[index].id.clone();
-    cfg.custom_commands[index] = config::CustomCommand {
-        id,
-        trigger: trigger.clone(),
-        prompt,
-    };
-    config::save_config(&app, &cfg).map_err(|e| e.to_string())?;
-    sync_config_state(&app, &cfg);
-
-    log::info!("Custom command updated: !{}", trigger);
+    config::update_config(&app, |cfg| {
+        let index = cfg
+            .custom_commands
+            .iter()
+            .position(|command| command.id == id)
+            .ok_or_else(|| anyhow::anyhow!("Unknown command"))?;
+        let trigger = normalize_trigger(&trigger);
+        let prompt = prompt.trim().to_string();
+        validate_custom_command(cfg, &trigger, &prompt, Some(&id)).map_err(anyhow::Error::msg)?;
+        let id = cfg.custom_commands[index].id.clone();
+        cfg.custom_commands[index] = config::CustomCommand {
+            id,
+            trigger: trigger.clone(),
+            prompt,
+        };
+        log::info!("Custom command updated: !{}", trigger);
+        Ok(())
+    })
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 /// Delete a custom command by its stable ID.
 #[tauri::command]
 pub async fn delete_custom_command(app: AppHandle, id: String) -> Result<(), String> {
-    let mut cfg = config::load_config(&app).map_err(|e| e.to_string())?;
-    let index = cfg
-        .custom_commands
-        .iter()
-        .position(|command| command.id == id)
-        .ok_or_else(|| "Unknown command".to_string())?;
-    let removed = cfg.custom_commands.remove(index);
-    config::save_config(&app, &cfg).map_err(|e| e.to_string())?;
-    sync_config_state(&app, &cfg);
-
-    log::info!("Custom command deleted: !{}", removed.trigger);
+    config::update_config(&app, |cfg| {
+        let index = cfg
+            .custom_commands
+            .iter()
+            .position(|command| command.id == id)
+            .ok_or_else(|| anyhow::anyhow!("Unknown command"))?;
+        let removed = cfg.custom_commands.remove(index);
+        log::info!("Custom command deleted: !{}", removed.trigger);
+        Ok(())
+    })
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -314,29 +310,28 @@ pub async fn import_command_templates(app: AppHandle, path: String) -> Result<us
         .map_err(|error| format!("Could not read import file: {error}"))?;
     let imported: Vec<ImportedCommand> = serde_json::from_str(&contents)
         .map_err(|error| format!("Invalid template JSON: {error}"))?;
-    let mut config = config::load_config(&app).map_err(|error| error.to_string())?;
     let mut added = 0;
-    for template in imported {
-        let trigger = normalize_trigger(&template.trigger);
-        let prompt = template.prompt.trim().to_string();
-        if config
-            .custom_commands
-            .iter()
-            .any(|command| command.trigger == trigger)
-        {
-            continue;
+    config::update_config(&app, |config| {
+        for template in imported {
+            let trigger = normalize_trigger(&template.trigger);
+            let prompt = template.prompt.trim().to_string();
+            if config
+                .custom_commands
+                .iter()
+                .any(|command| command.trigger == trigger)
+            {
+                continue;
+            }
+            validate_custom_command(config, &trigger, &prompt, None).map_err(anyhow::Error::msg)?;
+            config.custom_commands.push(config::CustomCommand {
+                id: format!("cmd-{trigger}"),
+                trigger,
+                prompt,
+            });
+            added += 1;
         }
-        validate_custom_command(&config, &trigger, &prompt, None)?;
-        config.custom_commands.push(config::CustomCommand {
-            id: format!("cmd-{trigger}"),
-            trigger,
-            prompt,
-        });
-        added += 1;
-    }
-    if added > 0 {
-        crate::config::save_config(&app, &config).map_err(|error| error.to_string())?;
-        sync_config_state(&app, &config);
-    }
+        Ok(())
+    })
+    .map_err(|error| error.to_string())?;
     Ok(added)
 }
