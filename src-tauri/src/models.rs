@@ -602,6 +602,23 @@ pub fn cancel_local_model_download(app: AppHandle, id: String) -> Result<(), Str
     Ok(())
 }
 
+/// Return the one protected download currently owned by this Flick process.
+/// The models view may be closed while a large file is transferring; exposing
+/// this small piece of lifecycle state lets a reopened view recover its
+/// Cancel affordance instead of inviting the user to start a conflicting
+/// request.
+#[tauri::command]
+pub fn active_local_model_download(app: AppHandle) -> Result<Option<String>, String> {
+    let state = app
+        .try_state::<ModelDownloadState>()
+        .ok_or_else(|| "Model downloader is still starting. Please try again.".to_string())?;
+    let downloads = state
+        .active
+        .lock()
+        .map_err(|_| "Model download state is unavailable".to_string())?;
+    Ok(downloads.keys().next().cloned())
+}
+
 pub async fn download_model(app: &AppHandle, id: &str) -> Result<()> {
     download_model_with_cancel(app, id, &std::sync::atomic::AtomicBool::new(false)).await
 }

@@ -11,7 +11,17 @@
 
   async function refresh() {
     loading = true;
-    try { models = await invoke("list_local_models"); }
+    try {
+      const [availableModels, activeDownload] = await Promise.all([
+        invoke("list_local_models"),
+        // Download recovery is helpful, but it must never make the model
+        // library itself unavailable if the process is still registering its
+        // downloader state during app startup.
+        invoke("active_local_model_download").catch(() => null),
+      ]);
+      models = availableModels;
+      downloading = activeDownload || "";
+    }
     catch (message) { error = `Couldn't load your local models. Nothing was changed. ${String(message)}`; }
     finally { loading = false; }
   }
@@ -50,24 +60,34 @@
     .filter((model) => model.installed)
     .reduce((total, model) => total + (model.size_bytes || 0), 0);
   onMount(() => {
-    refresh();
     let unlisten;
-    listen("flick://model-download", ({ payload }) => {
-      if (!payload?.id) return;
-      if (payload.state === "complete") {
-        downloading = "";
-        delete progress[payload.id];
-        void refresh();
-        return;
+    let disposed = false;
+    void (async () => {
+      try {
+        const dispose = await listen("flick://model-download", ({ payload }) => {
+          if (!payload?.id) return;
+          if (payload.state === "complete") {
+            downloading = "";
+            delete progress[payload.id];
+            void refresh();
+            return;
+          }
+          if (payload.state === "failed") {
+            downloading = "";
+            error = `Download didn't finish. Your existing model is safe. ${payload.message || "Please try again."}`;
+            return;
+          }
+          if (payload.received !== undefined) progress[payload.id] = payload;
+        });
+        if (disposed) dispose();
+        else unlisten = dispose;
+      } catch (message) {
+        error = `Couldn't watch model downloads. ${String(message)}`;
+      } finally {
+        if (!disposed) void refresh();
       }
-      if (payload.state === "failed") {
-        downloading = "";
-        error = `Download didn't finish. Your existing model is safe. ${payload.message || "Please try again."}`;
-        return;
-      }
-      if (payload.received !== undefined) progress[payload.id] = payload;
-    }).then((dispose) => unlisten = dispose);
-    return () => unlisten?.();
+    })();
+    return () => { disposed = true; unlisten?.(); };
   });
 </script>
 

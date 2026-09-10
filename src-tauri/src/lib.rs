@@ -84,6 +84,7 @@ pub fn run() {
             models::list_local_models,
             models::download_local_model,
             models::cancel_local_model_download,
+            models::active_local_model_download,
             models::set_active_local_model,
             models::active_local_model_capabilities,
             models::delete_local_model,
