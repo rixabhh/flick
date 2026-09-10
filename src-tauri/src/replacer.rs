@@ -53,6 +53,37 @@ fn platform_modifier() -> Key {
     Key::Control
 }
 
+/// A transformation temporarily owns the system clipboard. Preserve the
+/// common non-text case as well as text, and fail before modifying a format
+/// Flick cannot safely put back. Replacing an image with an empty string is a
+/// subtle but destructive interruption to a user's workflow.
+enum ClipboardSnapshot {
+    Text(String),
+    Image(arboard::ImageData<'static>),
+}
+
+fn snapshot_clipboard(clipboard: &mut Clipboard) -> Result<ClipboardSnapshot> {
+    if let Ok(text) = clipboard.get_text() {
+        return Ok(ClipboardSnapshot::Text(text));
+    }
+    if let Ok(image) = clipboard.get_image() {
+        return Ok(ClipboardSnapshot::Image(image));
+    }
+    bail!("Flick could not safely preserve the current clipboard contents. Copy it as text or an image first, then try again.")
+}
+
+fn restore_clipboard(snapshot: &ClipboardSnapshot) {
+    if let Ok(mut clipboard) = Clipboard::new() {
+        let result = match snapshot {
+            ClipboardSnapshot::Text(text) => clipboard.set_text(text.clone()),
+            ClipboardSnapshot::Image(image) => clipboard.set_image(image.clone()),
+        };
+        if let Err(error) = result {
+            log::warn!("Could not restore the original clipboard contents: {error}");
+        }
+    }
+}
+
 /// Execute the full text replacement pipeline - per §8.3.
 #[allow(clippy::too_many_arguments)] // Existing public trigger pipeline; refactor follows its v2 command boundary.
 pub async fn execute_replacement(
@@ -75,14 +106,7 @@ pub async fn execute_replacement(
 
     // Step 1: Save current clipboard content
     let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
-    let original_clipboard = clipboard.get_text().unwrap_or_default();
-
-    // Helper closure to restore clipboard on failure
-    let restore_clipboard = |text: &str| {
-        if let Ok(mut cb) = Clipboard::new() {
-            let _ = cb.set_text(text.to_string());
-        }
-    };
+    let original_clipboard = snapshot_clipboard(&mut clipboard)?;
 
     // Step 2-3: Select all text and copy it
     // We use Ctrl+A to select all in the active field, then Ctrl+C to copy
@@ -237,13 +261,7 @@ pub async fn execute_custom_replacement(
 
     // Step 1: Save current clipboard
     let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
-    let original_clipboard = clipboard.get_text().unwrap_or_default();
-
-    let restore_clipboard = |text: &str| {
-        if let Ok(mut cb) = Clipboard::new() {
-            let _ = cb.set_text(text.to_string());
-        }
-    };
+    let original_clipboard = snapshot_clipboard(&mut clipboard)?;
 
     // Step 2-3: Select and copy
     let selected_text = match select_and_copy().await {
@@ -377,13 +395,11 @@ async fn transform_with_provider(
 /// Copy the currently selected text without altering the active selection.
 pub async fn capture_selected_text() -> Result<String> {
     let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
-    let original_clipboard = clipboard.get_text().unwrap_or_default();
+    let original_clipboard = snapshot_clipboard(&mut clipboard)?;
     // Composer privacy contract: capture an explicit selection only. Unlike
     // the rewrite pipeline, do not select the entire field here.
     let selected = copy_existing_selection().await;
-    if let Ok(mut restore) = Clipboard::new() {
-        let _ = restore.set_text(original_clipboard);
-    }
+    restore_clipboard(&original_clipboard);
     selected
 }
 
@@ -411,15 +427,13 @@ async fn copy_existing_selection() -> Result<String> {
 /// Callers must ask for explicit user confirmation before invoking this.
 pub async fn paste_text_transaction(text: &str) -> Result<()> {
     let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
-    let original_clipboard = clipboard.get_text().unwrap_or_default();
+    let original_clipboard = snapshot_clipboard(&mut clipboard)?;
     clipboard
         .set_text(text.to_string())
         .context("Failed to set clipboard text")?;
     let paste_result = simulate_paste().await;
     sleep(CLIPBOARD_RESTORE_DELAY).await;
-    if let Ok(mut restore) = Clipboard::new() {
-        let _ = restore.set_text(original_clipboard);
-    }
+    restore_clipboard(&original_clipboard);
     paste_result
 }
 
@@ -483,7 +497,9 @@ async fn select_and_copy() -> Result<String> {
 
     // Read clipboard content
     let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
-    let text = clipboard.get_text().unwrap_or_default();
+    let text = clipboard
+        .get_text()
+        .context("The focused selection is not text")?;
     Ok(text)
 }
 
