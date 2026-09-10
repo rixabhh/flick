@@ -62,7 +62,7 @@
   async function insert() {
     error = "";
     if (!draftMatchesRequest()) {
-      error = "This draft was made from earlier context or instructions. Regenerate it before inserting.";
+      error = t("composer.staleError");
       return;
     }
     inserting = true;
@@ -147,9 +147,9 @@
     {#if error}<p class="error" role="alert"><span aria-hidden="true">!</span>{error}</p>{/if}
     {#if draft}
       <section class="draft-card">
-        <div class="field-label"><label for="draft">{t("composer.draft")}</label>{#if draftMatchesRequest()}<span class="ready"><i></i> Ready to send</span>{:else}<span class="stale" role="status">Regenerate before insert</span>{/if}</div>
+        <div class="field-label"><label for="draft">{t("composer.draft")}</label>{#if draftMatchesRequest()}<span class="ready"><i></i> {t("composer.ready")}</span>{:else}<span class="stale" role="status">{t("composer.stale")}</span>{/if}</div>
         <textarea id="draft" class="draft" bind:value={draft}></textarea>
-        <div class="actions"><button class="secondary" onclick={copy}>{copied ? t("composer.copied") : t("composer.copy")}</button><button class="insert" onclick={insert} disabled={inserting || !draftMatchesRequest()} title={draftMatchesRequest() ? undefined : "Regenerate after changing the request before inserting."}>{inserting ? "Inserting…" : t("composer.insert")}</button></div>
+        <div class="actions"><button class="secondary" onclick={copy}>{copied ? t("composer.copied") : t("composer.copy")}</button><button class="insert" onclick={insert} disabled={inserting || !draftMatchesRequest()} title={draftMatchesRequest() ? undefined : t("composer.staleTooltip")}>{inserting ? "Inserting…" : t("composer.insert")}</button></div>
       </section>
     {/if}
   </section>

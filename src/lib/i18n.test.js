@@ -5,6 +5,7 @@ describe("localization", () => {
   it("translates the command-center surface into Spanish", () => {
     expect(translate("es", "tab.dictate")).toBe("Dictado");
     expect(translate("es", "home.title")).toBe("Tu espacio de escritura");
+    expect(translate("es", "composer.stale")).toBe("Regenera antes de insertar");
   });
 
   it("falls back safely to English for missing languages or keys", () => {
