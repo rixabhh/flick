@@ -20,6 +20,7 @@
   let providerNotice = $state("Provider details are loading…");
   let language = $state("en");
   let contextInput = $state();
+  let generateShortcut = $state("⌘ ↵");
 
   const t = (key) => translate(language, key);
   const toneValue = () => tone === "Custom" ? (customTone.trim() || "friendly") : tone.toLowerCase();
@@ -89,6 +90,10 @@
     let disposed = false;
     let unlisten = () => {};
     const focusTimer = setTimeout(() => contextInput?.focus(), 0);
+    // The handler supports either modifier. Reflect the user's platform in
+    // the compact hint rather than teaching Windows/Linux users a macOS-only
+    // shortcut.
+    if (!/mac/i.test(navigator.platform || navigator.userAgent)) generateShortcut = "Ctrl ↵";
     // Register the selection channel before the best-effort settings lookup.
     // `open_from_shortcut` captures text before showing this webview, so a
     // cold-start composer must be ready to receive it without waiting on disk
@@ -115,7 +120,7 @@
   });
 </script>
 
-<main class="composer" role="dialog" aria-modal="true" aria-labelledby="composer-title" onkeydown={handleKeydown}>
+<main class="composer" role="dialog" aria-modal="true" aria-labelledby="composer-title" aria-busy={loading || capturing || inserting} onkeydown={handleKeydown}>
   <section class="window-surface">
     <header data-tauri-drag-region>
       <div class="title-group" data-tauri-drag-region>
@@ -141,7 +146,7 @@
     </section>
 
     <section class="field-group">
-      <div class="field-label"><label for="intent">{t("composer.intent")}</label><span class="shortcut">⌘ ↵</span></div>
+      <div class="field-label"><label for="intent">{t("composer.intent")}</label><span class="shortcut">{generateShortcut}</span></div>
       <textarea id="intent" class="intent" bind:value={instruction} placeholder={t("composer.intentPlaceholder")}></textarea>
     </section>
 
