@@ -19,6 +19,7 @@
   let draftSignature = $state("");
   let providerNotice = $state("Provider details are loading…");
   let language = $state("en");
+  let contextInput = $state();
 
   const t = (key) => translate(language, key);
   const toneValue = () => tone === "Custom" ? (customTone.trim() || "friendly") : tone.toLowerCase();
@@ -87,6 +88,7 @@
   onMount(() => {
     let disposed = false;
     let unlisten = () => {};
+    const focusTimer = setTimeout(() => contextInput?.focus(), 0);
     void (async () => {
       try {
         const config = await invoke("get_config");
@@ -103,7 +105,7 @@
       if (disposed) dispose();
       else unlisten = dispose;
     })();
-    return () => { disposed = true; unlisten(); };
+    return () => { disposed = true; unlisten(); clearTimeout(focusTimer); };
   });
 </script>
 
@@ -121,7 +123,7 @@
 
     <section class="field-group">
       <div class="field-label"><label for="context">{t("composer.context")}</label><button class="capture" onclick={captureSelection} disabled={capturing}>{capturing ? "Capturing…" : t("composer.capture")}</button></div>
-      <textarea id="context" class="context" bind:value={context} placeholder={t("composer.contextPlaceholder")}></textarea>
+      <textarea id="context" class="context" bind:this={contextInput} bind:value={context} placeholder={t("composer.contextPlaceholder")}></textarea>
     </section>
 
     <section class="field-group">
