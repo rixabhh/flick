@@ -29,6 +29,15 @@ test("primary settings sections work with keyboard navigation", async ({ page })
   await expect(page.getByRole("tab", { name: "Advanced", exact: true })).toHaveAttribute("aria-selected", "true");
 });
 
+test("models screen recovers when native model discovery is unavailable", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("tab", { name: "Models", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "Speech models" })).toBeVisible();
+  await expect(page.getByText("Couldn't load your local models. Nothing was changed.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh", exact: true })).toBeEnabled();
+});
+
 test("dictation settings exposes a stable floating-pill placement choice", async ({ page }) => {
   await page.goto("/");
 
