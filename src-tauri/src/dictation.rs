@@ -10,6 +10,7 @@ use cpal::{SampleFormat, Stream};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
 struct Active {
@@ -77,10 +78,16 @@ impl DictationState {
         let input_level = Arc::new(AtomicU32::new(0.0f32.to_bits()));
         let flag = Arc::clone(&recording);
         let level = Arc::clone(&input_level);
-        std::thread::Builder::new()
+        if let Err(error) = std::thread::Builder::new()
             .name("flick-audio".into())
             .spawn(move || audio_loop(receiver, flag, level))
-            .expect("audio thread");
+        {
+            // Failing to allocate a helper thread should leave dictation
+            // unavailable, never prevent Flick itself from launching. The
+            // disconnected channel below gives each command a clear recovery
+            // error if this exceptionally rare OS failure occurs.
+            log::error!("Could not start Flick's audio worker: {error}");
+        }
         Self {
             sender,
             recording,
@@ -221,6 +228,22 @@ pub fn dictation_runtime_info() -> DictationRuntimeInfo {
         details: "Whisper GGML and verified GGUF models (including Parakeet, Canary, Qwen3 ASR, SenseVoice, and Moonshine) run on this device. Flick never uploads audio when Local models is selected.".to_string(),
     }
 }
+
+const AUDIO_COMMAND_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Native device calls run off the UI thread. A broken driver or worker must
+/// not leave the shortcut handler waiting forever and make Flick appear hung.
+fn await_audio_response<T>(receiver: mpsc::Receiver<Result<T>>) -> Result<T> {
+    match receiver.recv_timeout(AUDIO_COMMAND_TIMEOUT) {
+        Ok(result) => result,
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            bail!("Audio service did not respond within 5 seconds. Check your microphone and try again.")
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            bail!("Audio service is unavailable. Restart Flick and try again.")
+        }
+    }
+}
 /// Briefly capture from the selected microphone and discard the samples. This
 /// is a permission/device check only: it never loads a model, transcribes,
 /// saves, or pastes text.
@@ -269,7 +292,7 @@ pub fn start(app: &AppHandle) -> Result<()> {
             response: sender,
         })
         .context("Audio thread unavailable")?;
-    receiver.recv().context("Audio thread did not respond")??;
+    await_audio_response(receiver)?;
     show_overlay(app, "recording");
     Ok(())
 }
@@ -320,7 +343,7 @@ pub fn cancel(app: &AppHandle) -> Result<()> {
         .sender
         .send(Command::Cancel(sender))
         .context("Audio thread unavailable")?;
-    receiver.recv().context("Audio thread did not respond")??;
+    await_audio_response(receiver)?;
     hide_overlay(app);
     Ok(())
 }
@@ -470,7 +493,7 @@ async fn stop_and_transcribe_inner(app: &AppHandle) -> Result<String> {
             .sender
             .send(Command::Stop(sender))
             .context("Audio thread unavailable")?;
-        receiver.recv().context("Audio thread did not respond")??
+        await_audio_response(receiver)?
     };
     let audio = trim_silence(resample(&capture.samples, capture.channels, capture.rate));
     if audio.len() < 1_600 {
@@ -729,6 +752,14 @@ fn post_process(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn disconnected_audio_worker_returns_a_recoverable_error() {
+        let (sender, receiver) = mpsc::channel::<Result<()>>();
+        drop(sender);
+        let error = await_audio_response(receiver).expect_err("closed workers must not hang callers");
+        assert!(error.to_string().contains("Audio service is unavailable"));
+    }
     #[test]
     fn downmixes_and_resamples() {
         let output = resample(&[1.0, -1.0, 1.0, -1.0], 2, 8_000);
