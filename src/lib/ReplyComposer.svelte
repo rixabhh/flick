@@ -16,11 +16,14 @@
   let inserting = $state(false);
   let error = $state("");
   let copied = $state(false);
+  let draftSignature = $state("");
   let providerNotice = $state("Provider details are loading…");
   let language = $state("en");
 
   const t = (key) => translate(language, key);
   const toneValue = () => tone === "Custom" ? (customTone.trim() || "friendly") : tone.toLowerCase();
+  const requestSignature = () => `${context}\u0000${toneValue()}\u0000${instruction}`;
+  const draftMatchesRequest = () => Boolean(draft) && draftSignature === requestSignature();
 
   async function captureSelection() {
     error = "";
@@ -34,7 +37,14 @@
     if (!context.trim() || !instruction.trim()) return;
     error = "";
     loading = true;
-    try { draft = await invoke("generate_reply", { context, tone: toneValue(), instruction }); }
+    const signature = requestSignature();
+    try {
+      draft = await invoke("generate_reply", { context, tone: toneValue(), instruction });
+      // A user can keep typing while the provider is responding. Associate
+      // the result with the exact request that left Flick, not whatever is in
+      // the fields when the promise later resolves.
+      draftSignature = signature;
+    }
     catch (message) { error = String(message); }
     finally { loading = false; }
   }
@@ -50,6 +60,10 @@
 
   async function insert() {
     error = "";
+    if (!draftMatchesRequest()) {
+      error = "This draft was made from earlier context or instructions. Regenerate it before inserting.";
+      return;
+    }
     inserting = true;
     try { await invoke("insert_reply", { draft }); }
     catch (message) { error = `${message} Your draft is still here; use Copy instead.`; }
@@ -93,12 +107,12 @@
   });
 </script>
 
-<main class="composer" onkeydown={handleKeydown}>
+<main class="composer" role="dialog" aria-modal="true" aria-labelledby="composer-title" onkeydown={handleKeydown}>
   <section class="window-surface">
     <header data-tauri-drag-region>
       <div class="title-group" data-tauri-drag-region>
         <span class="composer-mark" aria-hidden="true">↗</span>
-        <div data-tauri-drag-region><span class="eyebrow">FLICK REPLY</span><h1>{t("composer.title")}</h1></div>
+        <div data-tauri-drag-region><span class="eyebrow">FLICK REPLY</span><h1 id="composer-title">{t("composer.title")}</h1></div>
       </div>
       <button class="icon" aria-label={t("composer.close")} onclick={() => getCurrentWindow().hide()}>×</button>
     </header>
@@ -131,9 +145,9 @@
     {#if error}<p class="error" role="alert"><span aria-hidden="true">!</span>{error}</p>{/if}
     {#if draft}
       <section class="draft-card">
-        <div class="field-label"><label for="draft">{t("composer.draft")}</label><span class="ready"><i></i> Ready to send</span></div>
+        <div class="field-label"><label for="draft">{t("composer.draft")}</label>{#if draftMatchesRequest()}<span class="ready"><i></i> Ready to send</span>{:else}<span class="stale" role="status">Regenerate before insert</span>{/if}</div>
         <textarea id="draft" class="draft" bind:value={draft}></textarea>
-        <div class="actions"><button class="secondary" onclick={copy}>{copied ? t("composer.copied") : t("composer.copy")}</button><button class="insert" onclick={insert} disabled={inserting}>{inserting ? "Inserting…" : t("composer.insert")}</button></div>
+        <div class="actions"><button class="secondary" onclick={copy}>{copied ? t("composer.copied") : t("composer.copy")}</button><button class="insert" onclick={insert} disabled={inserting || !draftMatchesRequest()} title={draftMatchesRequest() ? undefined : "Regenerate after changing the request before inserting."}>{inserting ? "Inserting…" : t("composer.insert")}</button></div>
       </section>
     {/if}
   </section>
@@ -169,6 +183,7 @@
   .error { display:flex; gap:6px; margin:10px 0 0; padding:8px 9px; border:1px solid rgba(255,130,130,.2); border-radius:9px; color:#ffd1d1; background:rgba(210,63,63,.12); font-size:10px; line-height:1.35; }.error > :first-child{display:grid;place-items:center;flex:0 0 14px;width:14px;height:14px;border-radius:50%;color:#ffbcbc;background:rgba(255,132,132,.2);font-weight:800}
   .draft-card { margin-top:14px; padding:11px; border:1px solid rgba(153,193,255,.16); border-radius:14px; background:rgba(122,159,236,.075); animation:reveal 220ms cubic-bezier(.2,.8,.2,1) both; }
   .ready { display:flex; align-items:center; gap:4px; color:rgba(190,240,207,.84); font-size:9px; }.ready i{width:5px;height:5px;border-radius:50%;background:#88e5a7;box-shadow:0 0 7px rgba(136,229,167,.7)}
+  .stale { color:#ffd69a; font-size:9px; }
   .actions { margin-top:8px; }.secondary,.insert { flex:1; border:1px solid rgba(255,255,255,.13); }.secondary { color:rgba(247,249,255,.85); background:rgba(255,255,255,.07); }.secondary:hover{border-color:rgba(193,213,255,.35);background:rgba(255,255,255,.11)}.insert { color:#10213d; background:linear-gradient(180deg,#d7e6ff,#9fc0f8); border-color:rgba(204,223,255,.5); }
   @keyframes spin { to { transform:rotate(360deg); } }@keyframes reveal { from{opacity:0;transform:translateY(6px) scale(.985)}to{opacity:1;transform:none} }
   @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration:.01ms!important; transition-duration:.01ms!important; } }
