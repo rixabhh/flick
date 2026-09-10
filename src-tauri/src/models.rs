@@ -38,6 +38,7 @@ pub struct ModelInfo {
     pub language: String,
     pub engine: String,
     pub supports_translation: bool,
+    pub supports_language_detection: bool,
     pub supported_languages: Vec<String>,
     pub size_bytes: u64,
     /// The binary is present but has not yet been verified by Flick. This is
@@ -459,6 +460,7 @@ pub async fn list_local_models(app: AppHandle) -> Result<Vec<ModelInfo>, String>
             language: model.language.to_string(),
             engine: catalog_engine(model).to_string(),
             supports_translation: capabilities.supports_translation,
+            supports_language_detection: capabilities.supports_language_detection,
             supported_languages: capabilities.supported_languages,
             size_bytes: model.size_bytes,
             available_locally,
@@ -493,6 +495,7 @@ pub async fn list_local_models(app: AppHandle) -> Result<Vec<ModelInfo>, String>
                         "Compatible GGML".into()
                     },
                     supports_translation: false,
+                    supports_language_detection: false,
                     supported_languages: Vec::new(),
                     size_bytes: entry.metadata().map(|metadata| metadata.len()).unwrap_or(0),
                     available_locally: true,

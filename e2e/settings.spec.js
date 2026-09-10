@@ -41,3 +41,14 @@ test("dictation settings exposes a stable floating-pill placement choice", async
   await expect(placement).toHaveValue("bottom-right");
   await expect(page.getByText("Used for both dictation and transformation status.")).toBeVisible();
 });
+
+test("dictation language picker covers verified local model families", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("tab", { name: "Dictate", exact: true }).click();
+
+  const language = page.getByLabel("Spoken language");
+  await expect(language.locator('option[value="zh"]')).toHaveText("Chinese");
+  await expect(language.locator('option[value="yue"]')).toHaveText("Cantonese");
+  await expect(language.locator('option[value="ja"]')).toHaveText("Japanese");
+  await expect(language.locator('option[value="auto"]')).toHaveText("Detect automatically");
+});
