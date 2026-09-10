@@ -20,8 +20,11 @@
   onMount(() => {
     let disposed = false;
     let unlisten = () => {};
+    // Listen first: the first dictation shortcut can show this lightweight
+    // webview while its presentation preferences are still loading. The
+    // transcribing event triggers a refresh below, so provider copy catches up
+    // without losing the state transition.
     void (async () => {
-      await refreshPresentationConfig();
       const dispose = await listen("flick://dictation-state", (event) => {
         state = String(event.payload || "recording");
         if (state === "transcribing") void refreshPresentationConfig();
@@ -29,6 +32,7 @@
       if (disposed) dispose();
       else unlisten = dispose;
     })();
+    void refreshPresentationConfig();
     return () => { disposed = true; unlisten(); };
   });
 
