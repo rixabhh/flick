@@ -27,6 +27,7 @@ playwright-report/
 
 # Tauri
 src-tauri/target
+src-tauri/target-installer
 src-tauri/gen
 
 # Project Specific
