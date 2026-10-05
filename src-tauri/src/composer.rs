@@ -34,8 +34,8 @@ pub struct ComposerSessionState {
 // renderer expands and collapses fields.
 const COMPOSER_WIDTH: f64 = 420.0;
 const COMPOSER_HEIGHT: f64 = 360.0;
-const SHORTCUT_RELEASE_DELAY: Duration = Duration::from_millis(120);
-const CAPTURE_RETRY_DELAY: Duration = Duration::from_millis(90);
+const SHORTCUT_RELEASE_DELAY: Duration = Duration::from_millis(220);
+const CAPTURE_RETRY_DELAY: Duration = Duration::from_millis(140);
 
 fn foreground_target() -> Result<TargetIdentity, String> {
     let window =

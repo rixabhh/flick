@@ -278,12 +278,14 @@ pub fn start_hook_with_name_detection(app: AppHandle) -> mpsc::Receiver<HookEven
     let (tx, rx) = mpsc::channel();
     let modifiers = Arc::new(Mutex::new(HashSet::new()));
     let dictation_press = Arc::new(Mutex::new(None::<(Key, Instant, bool)>));
+    let composer_press = Arc::new(Mutex::new(None::<Key>));
 
     thread::spawn(move || {
         log::info!("Global key hook thread started (with name detection)");
 
         let callback_modifiers = Arc::clone(&modifiers);
         let callback_dictation_press = Arc::clone(&dictation_press);
+        let callback_composer_press = Arc::clone(&composer_press);
         let callback = move |event: Event| {
             match event.event_type {
                 EventType::KeyPress(key) => {
@@ -326,7 +328,13 @@ pub fn start_hook_with_name_detection(app: AppHandle) -> mpsc::Receiver<HookEven
                         }
                         if shortcut_matches(&config.composer_shortcut, key, &active) {
                             if !is_repeat {
-                                let _ = tx.send(HookEvent::OpenComposer);
+                                // Dispatch only after the shortcut's primary
+                                // key is released. Otherwise the synthetic
+                                // Copy used for capture can race the user's
+                                // still-held modifiers.
+                                if let Ok(mut pending) = callback_composer_press.lock() {
+                                    *pending = Some(key);
+                                }
                             }
                             return;
                         }
@@ -435,6 +443,21 @@ pub fn start_hook_with_name_detection(app: AppHandle) -> mpsc::Receiver<HookEven
                         });
                     if should_stop {
                         let _ = tx.send(HookEvent::StopDictation);
+                    }
+                    let should_open_composer =
+                        callback_composer_press
+                            .lock()
+                            .ok()
+                            .is_some_and(|mut pending| {
+                                if pending.as_ref() == Some(&key) {
+                                    *pending = None;
+                                    true
+                                } else {
+                                    false
+                                }
+                            });
+                    if should_open_composer {
+                        let _ = tx.send(HookEvent::OpenComposer);
                     }
                     if let Ok(mut active) = callback_modifiers.lock() {
                         active.remove(&key);

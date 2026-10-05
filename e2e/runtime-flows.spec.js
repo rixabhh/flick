@@ -161,7 +161,7 @@ test("microphone startup is never presented as active recording", async ({ page 
   await expect(page.locator(".wave")).toHaveCount(0);
   await emit(page, "flick://dictation-state", "recording");
   await expect(page.locator(".overlay strong")).toHaveText("Recording");
-  await expect(page.locator(".pill")).toHaveCSS("width", "148px");
+  await expect(page.locator(".pill")).toHaveCSS("width", "164px");
 });
 
 test("large model libraries filter variants and paginate without hiding installed models", async ({ page }) => {
