@@ -91,6 +91,18 @@ pub fn validate_config(config: &crate::config::FlickConfig) -> Result<(), String
             return Err("Each Flick action needs a different shortcut.".into());
         }
     }
+    if [
+        &config.composer_shortcut,
+        &config.dictation_shortcut,
+        &config.copy_last_result_shortcut,
+        &config.paste_plain_text_shortcut,
+    ]
+    .iter()
+    .filter_map(|shortcut| normalize(shortcut).ok())
+    .any(|shortcut| matches!(shortcut.as_str(), "Ctrl+C" | "Ctrl+V" | "Cmd+C" | "Cmd+V"))
+    {
+        return Err("Ctrl/Cmd+C and Ctrl/Cmd+V are reserved for normal copy and paste.".into());
+    }
     Ok(())
 }
 
@@ -115,6 +127,8 @@ mod tests {
         let mut config = crate::config::FlickConfig::default();
         assert!(validate_config(&config).is_ok());
         config.composer_shortcut = config.dictation_shortcut.clone();
+        assert!(validate_config(&config).is_err());
+        config.composer_shortcut = "Ctrl+V".into();
         assert!(validate_config(&config).is_err());
     }
 }

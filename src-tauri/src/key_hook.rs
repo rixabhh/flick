@@ -4,13 +4,37 @@
 
 use rdev::{listen, Event, EventType, Key};
 use std::collections::HashSet;
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{mpsc, OnceLock};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
 
 const HOLD_OR_TOGGLE_THRESHOLD: Duration = Duration::from_millis(300);
+static SYNTHETIC_CHORD_EPOCH: OnceLock<Instant> = OnceLock::new();
+static SUPPRESS_SYNTHETIC_CHORDS_UNTIL_MS: AtomicU64 = AtomicU64::new(0);
+
+fn chord_clock_ms() -> u64 {
+    SYNTHETIC_CHORD_EPOCH
+        .get_or_init(Instant::now)
+        .elapsed()
+        .as_millis()
+        .try_into()
+        .unwrap_or(u64::MAX)
+}
+
+/// Ignore the synthetic Ctrl/Cmd chord injected by Flick itself. The user can
+/// still use a real shortcut immediately after this short lease ends.
+pub fn suppress_synthetic_chords_for(duration: Duration) {
+    let until =
+        chord_clock_ms().saturating_add(duration.as_millis().try_into().unwrap_or(u64::MAX));
+    SUPPRESS_SYNTHETIC_CHORDS_UNTIL_MS.fetch_max(until, Ordering::SeqCst);
+}
+
+fn synthetic_chords_suppressed() -> bool {
+    chord_clock_ms() < SUPPRESS_SYNTHETIC_CHORDS_UNTIL_MS.load(Ordering::SeqCst)
+}
 
 /// Events sent from the key hook to the main processing loop.
 #[derive(Debug, Clone)]
@@ -287,6 +311,19 @@ pub fn start_hook_with_name_detection(app: AppHandle) -> mpsc::Receiver<HookEven
                         .try_state::<crate::AppState>()
                         .and_then(|state| state.config.lock().ok().map(|config| config.clone()));
                     if let (Some(config), Ok(active)) = (config, callback_modifiers.lock()) {
+                        // Never hijack the operating system's normal copy or
+                        // paste chord, including in an older saved config that
+                        // predates validation. This must run before Flick's
+                        // configurable actions are considered.
+                        if is_standard_clipboard_chord(key, &active) {
+                            return;
+                        }
+                        // Enigo's generated Ctrl/Cmd+A/C/V events are visible
+                        // to this global listener. Ignore them rather than
+                        // allowing one of Flick's actions to recursively fire.
+                        if synthetic_chords_suppressed() && command_modifier_active(&active) {
+                            return;
+                        }
                         if shortcut_matches(&config.composer_shortcut, key, &active) {
                             if !is_repeat {
                                 let _ = tx.send(HookEvent::OpenComposer);
@@ -471,6 +508,18 @@ fn command_modifier_active(active: &HashSet<Key>) -> bool {
         || active.contains(&Key::Alt)
 }
 
+fn is_standard_clipboard_chord(key: Key, active: &HashSet<Key>) -> bool {
+    matches!(key, Key::KeyC | Key::KeyV)
+        && (active.contains(&Key::ControlLeft)
+            || active.contains(&Key::ControlRight)
+            || active.contains(&Key::MetaLeft)
+            || active.contains(&Key::MetaRight))
+        && !active.contains(&Key::Alt)
+        && !active.contains(&Key::AltGr)
+        && !active.contains(&Key::ShiftLeft)
+        && !active.contains(&Key::ShiftRight)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -503,6 +552,16 @@ mod tests {
             assert!(command_modifier_active(&HashSet::from([modifier])));
         }
         assert!(!command_modifier_active(&HashSet::from([Key::ShiftLeft])));
+    }
+
+    #[test]
+    fn standard_copy_and_paste_never_become_flick_shortcuts() {
+        let control = HashSet::from([Key::ControlLeft]);
+        assert!(is_standard_clipboard_chord(Key::KeyC, &control));
+        assert!(is_standard_clipboard_chord(Key::KeyV, &control));
+        assert!(!is_standard_clipboard_chord(Key::KeyR, &control));
+        let modified = HashSet::from([Key::ControlLeft, Key::Alt]);
+        assert!(!is_standard_clipboard_chord(Key::KeyV, &modified));
     }
 
     #[test]

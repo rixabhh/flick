@@ -402,7 +402,15 @@ async fn transform_with_provider(
 /// Capture only the user's explicit selection, without selecting the field.
 pub async fn capture_selected_text() -> Result<String> {
     let target = active_target::get().context("Flick could not verify the source app")?;
-    capture_text(&target, false).await
+    capture_selected_text_from_target(&target).await
+}
+
+/// Capture an explicit selection from a target captured before a global
+/// shortcut was released. This keeps the copy scoped to that source window.
+pub async fn capture_selected_text_from_target(
+    target: &active_target::ActiveTarget,
+) -> Result<String> {
+    capture_text(target, false).await
 }
 
 async fn capture_text(target: &active_target::ActiveTarget, select_all: bool) -> Result<String> {
@@ -497,6 +505,10 @@ fn simulate_key_chord(key: char) -> Result<()> {
     if try_linux_key_chord(&key.to_string()) {
         return Ok(());
     }
+    // Global hooks receive Enigo's synthetic keyboard events as well. Suppress
+    // those briefly so a user-configured shortcut can never re-trigger Flick's
+    // own copy/paste action and create a paste loop.
+    crate::key_hook::suppress_synthetic_chords_for(Duration::from_millis(180));
     let mut enigo = Enigo::new(&Settings::default())
         .map_err(|error| anyhow::anyhow!("Failed to create keyboard input: {error:?}"))?;
     enigo

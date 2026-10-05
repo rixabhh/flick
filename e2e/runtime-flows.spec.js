@@ -39,7 +39,9 @@ test("preflight errors actually show a previously hidden status pill", async ({ 
   await page.goto("/");
   await expect.poll(async () => (await calls(page, "plugin:event|listen")).length).toBe(5);
   await emit(page, "flick://error", { message: "Microphone permission denied" });
-  await expect(page.getByRole("alert")).toContainText("Microphone permission denied");
+  await expect(page.getByRole("alert")).toContainText("Couldn’t transform");
+  await expect(page.locator(".pill strong")).toHaveAttribute("aria-label", "Microphone permission denied");
+  await expect(page.locator(".pill.error")).toHaveCSS("border-radius", "999px");
   await expect.poll(async () => (await calls(page, "plugin:window|show")).length).toBe(1);
 });
 

@@ -34,6 +34,8 @@ pub struct ComposerSessionState {
 // renderer expands and collapses fields.
 const COMPOSER_WIDTH: f64 = 420.0;
 const COMPOSER_HEIGHT: f64 = 360.0;
+const SHORTCUT_RELEASE_DELAY: Duration = Duration::from_millis(120);
+const CAPTURE_RETRY_DELAY: Duration = Duration::from_millis(90);
 
 fn foreground_target() -> Result<TargetIdentity, String> {
     let window =
@@ -103,6 +105,26 @@ fn current_target_is_protected(app: &AppHandle) -> bool {
         .unwrap_or(true)
 }
 
+async fn capture_shortcut_selection(target: &TargetIdentity) -> Result<String, String> {
+    // The global shortcut key-up events can still be in the OS input queue.
+    // Wait for them before injecting Copy, then retry once for slower apps such
+    // as browsers and native chat clients. Every attempt verifies this target.
+    sleep(SHORTCUT_RELEASE_DELAY).await;
+    let mut last_error = None;
+    for attempt in 0..2 {
+        match replacer::capture_selected_text_from_target(target).await {
+            Ok(selection) => return Ok(selection),
+            Err(error) => last_error = Some(error),
+        }
+        if attempt == 0 {
+            sleep(CAPTURE_RETRY_DELAY).await;
+        }
+    }
+    Err(last_error
+        .map(|error| error.to_string())
+        .unwrap_or_else(|| "Flick could not capture the selected text.".to_string()))
+}
+
 /// Captures an explicit selection before the composer window is shown. Drafts
 /// remain in the renderer; captured context has only a short-lived, in-memory
 /// handoff so a newly opened renderer can hydrate reliably.
@@ -129,8 +151,13 @@ pub async fn open_from_shortcut(app: &AppHandle) {
             Some("Flick will not capture text from a protected app or password field.".to_string()),
         )
     } else {
-        remember_target(app, foreground_target().ok());
-        match replacer::capture_selected_text().await {
+        let target = foreground_target();
+        remember_target(app, target.clone().ok());
+        let capture = match target {
+            Ok(target) => capture_shortcut_selection(&target).await,
+            Err(error) => Err(error),
+        };
+        match capture {
             Ok(context) => (context, None),
             Err(error) => {
                 log::warn!("Could not capture reply context: {error}");

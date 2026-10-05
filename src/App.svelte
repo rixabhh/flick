@@ -44,8 +44,17 @@
     }
   }
 
+  function makeCompanionCanvasTransparent() {
+    if (!['toast', 'dictation', 'composer'].includes(windowLabel)) return;
+    for (const element of [document.documentElement, document.body, document.getElementById('app')]) {
+      element?.style.setProperty('background', 'transparent', 'important');
+      element?.style.setProperty('background-image', 'none', 'important');
+    }
+  }
+
   onMount(() => {
     detectWindow();
+    makeCompanionCanvasTransparent();
     applySavedTheme();
   });
 </script>
