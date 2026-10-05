@@ -716,8 +716,8 @@
     flex-direction: column;
     height: 100vh;
     background:
-      radial-gradient(circle at 8% -20%, rgba(130, 168, 255, 0.16), transparent 38%),
-      radial-gradient(circle at 100% 12%, rgba(92, 119, 196, 0.12), transparent 34%),
+      radial-gradient(circle at 8% -20%, rgba(143, 183, 255, 0.18), transparent 38%),
+      radial-gradient(circle at 100% 12%, rgba(167, 134, 255, 0.12), transparent 34%),
       var(--bg-primary);
     overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
@@ -726,15 +726,15 @@
   /* ===== Title Bar ===== */
   .title-bar {
     -webkit-app-region: drag;
-    background: rgba(16, 18, 25, 0.74);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 0 20px;
-    height: 52px;
+    background: rgba(20, 21, 26, 0.62);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0 24px;
+    height: 58px;
     display: flex;
     align-items: center;
     flex-shrink: 0;
-    backdrop-filter: blur(22px) saturate(1.25);
-    -webkit-backdrop-filter: blur(22px) saturate(1.25);
+    backdrop-filter: blur(28px) saturate(1.4);
+    -webkit-backdrop-filter: blur(28px) saturate(1.4);
   }
 
   .title-bar-content {
@@ -754,10 +754,10 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 25px;
-    height: 25px;
+    width: 28px;
+    height: 28px;
     border: 1px solid rgba(190, 213, 255, 0.28);
-    border-radius: 8px;
+    border-radius: 9px;
     background: linear-gradient(145deg, rgba(148, 184, 255, 0.26), rgba(85, 116, 185, 0.15));
     color: var(--text-primary);
     font-size: 0.76rem;
@@ -774,7 +774,7 @@
 
   .app-name {
     font-weight: 740;
-    font-size: 0.9rem;
+    font-size: 0.94rem;
     letter-spacing: -0.02em;
     color: var(--text-primary);
   }
@@ -802,10 +802,10 @@
   /* ===== Tab Navigation ===== */
   .tab-nav {
     display: flex;
-    gap: 3px;
-    padding: 9px 14px;
-    background: rgba(12, 14, 20, 0.54);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    gap: 4px;
+    padding: 10px 18px;
+    background: rgba(18, 19, 24, 0.38);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     flex-shrink: 0;
     overflow-x: auto;
     scrollbar-width: none;
@@ -815,13 +815,13 @@
     display: flex;
     align-items: center;
     gap: 7px;
-    min-height: 32px;
-    padding: 6px 9px;
+    min-height: 34px;
+    padding: 7px 10px;
     background: transparent;
     border: none;
-    border-radius: 8px;
+    border-radius: 9px;
     color: rgba(235, 240, 250, 0.58);
-    font-size: 0.72rem;
+    font-size: 0.74rem;
     font-weight: 650;
     cursor: pointer;
     transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
@@ -835,22 +835,22 @@
   }
 
   .tab-btn.active {
-    color: #edf4ff;
-    background: linear-gradient(145deg, rgba(117, 158, 239, 0.31), rgba(88, 119, 185, 0.18));
-    box-shadow: inset 0 1px rgba(255, 255, 255, 0.14), 0 2px 7px rgba(0, 0, 0, 0.12);
+    color: #f5f8ff;
+    background: linear-gradient(145deg, rgba(144, 182, 255, 0.28), rgba(94, 122, 192, 0.16));
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.16), 0 4px 12px rgba(0, 0, 0, 0.12);
   }
 
   /* ===== Tab Content ===== */
   .tab-content {
     flex: 1;
     overflow-y: auto;
-    padding: 22px 22px 26px;
+    padding: 28px clamp(24px, 5vw, 42px) 34px;
   }
 
   .panel-section {
     display: flex;
     flex-direction: column;
-    gap: 17px;
+    gap: 20px;
   }
 
   .section-desc {
@@ -889,13 +889,13 @@
     display: flex;
     flex-direction: column;
     gap: 7px;
-    padding: 14px;
+    padding: 16px;
     border-color: rgba(190, 209, 245, 0.12);
-    border-radius: 13px;
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.022));
-    box-shadow: inset 0 1px rgba(255, 255, 255, 0.07), 0 6px 16px rgba(0, 0, 0, 0.08);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    border-radius: 15px;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025));
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.09), 0 10px 22px rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(22px) saturate(1.25);
+    -webkit-backdrop-filter: blur(22px) saturate(1.25);
   }
 
   .provider-controls label > span {

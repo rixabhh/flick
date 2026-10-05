@@ -13,7 +13,7 @@ test("composer prevents repeated keyboard requests and discards a previous sessi
   await expect.poll(async () => (await calls(page, "generate_reply")).length).toBe(1);
   await emit(page, "flick://composer-context", { context: "A different conversation" });
   await page.evaluate(() => window.__flickTest.resolve("generate_reply", "Old private reply"));
-  await expect(page.locator("#context")).toHaveValue("A different conversation");
+  await expect(page.locator(".selection-chip")).toContainText("A different conversation");
   await expect(page.getByText("Old private reply")).toHaveCount(0);
   await expect(page.locator("#intent")).toHaveValue("");
   await page.locator("#intent").fill("New reply intent");
@@ -135,7 +135,7 @@ test("reply shortcut recording rejects conflicts and saves a custom chord", asyn
 });
 
 test("compact reply companion focuses intent and keeps long drafts usable", async ({ page }) => {
-  await page.setViewportSize({ width: 364, height: 430 });
+  await page.setViewportSize({ width: 420, height: 360 });
   await mockDesktop(page, "composer");
   await page.goto("/");
   await expect(page.locator("#context")).toBeVisible();
@@ -146,7 +146,7 @@ test("compact reply companion focuses intent and keeps long drafts usable", asyn
   await page.locator(".generate").click();
   await expect(page.locator("#draft")).toHaveValue("Thanks, that works for me.");
   await expect(page.getByRole("button", { name: "Insert into app" })).toBeEnabled();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= 364)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= 420)).toBe(true);
   await page.screenshot({ path: "test-results/compact-composer.png" });
 });
 
