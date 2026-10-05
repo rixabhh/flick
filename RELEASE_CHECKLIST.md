@@ -2,19 +2,19 @@
 
 ## Required signing material
 
-- Windows: an Authenticode code-signing certificate and timestamp service credentials.
-- macOS: Developer ID Application certificate, App Store Connect issuer/key/ID, and notarization credentials.
+- Windows: an Authenticode code-signing certificate exported as a base64 PFX, its export password, and the certificate authority's timestamp URL. Configure them as protected repository secrets: `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD`, and `WINDOWS_TIMESTAMP_URL`.
+- macOS: a Developer ID Application certificate exported as base64 P12, its export password, the signing identity, and Apple notarization credentials. Configure `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID` as protected repository secrets.
 - Updates: currently manual downloads. An automatic updater must not be advertised until its plugin, signed feed, and upgrade/rollback testing exist.
 - Linux: distribution-specific package-signing key where the selected channel requires one.
 
-Do not place any signing material in this repository, settings file, template export, diagnostics bundle, or application package. Configure it as protected CI secrets only.
+Do not place any signing material in this repository, settings file, template export, diagnostics bundle, or application package. Configure it as protected CI secrets only. A self-signed certificate is useful for local testing but is not a public-release substitute.
 
 ## Reproducible build and draft process
 
 1. Run `Verify` on `main`. It must finish successfully for all five native targets and the browser regression suite.
 2. Run `Release` manually on `main` with **Create draft unchecked** and **tag empty**. This runs native tests and the actual release-mode installer builds without creating tags or releases. Installers and SHA-256 manifests are retained as workflow artifacts for 14 days.
 3. For an intentional candidate release, keep `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` versions identical; create the corresponding `v<version>` tag on the verified main commit. Pushing that tag runs Release. Alternatively choose an existing matching tag and check Create draft.
-4. All platforms must finish before the final job assembles a draft. A failed platform never publishes a partial release. Published releases cannot be overwritten by reruns; draft assets can be replaced deliberately by a rerun.
+4. All platforms must finish before the final job assembles a draft. Public Windows jobs import the PFX into the ephemeral runner, require the Code Signing EKU, configure Tauri with its thumbprint and timestamp URL, and verify every EXE/MSI with `signtool`. Public macOS jobs import the Developer ID identity into an ephemeral keychain, sign, notarize, staple, and assess the app and DMG. A failed platform never publishes a partial release. Published releases cannot be overwritten by reruns; draft assets can be replaced deliberately by a rerun.
 5. Validate artifact checksums, signing, clean-machine installation and feature acceptance before manually promoting the draft. A build-only success is not signing or native acceptance evidence.
 
 The macOS bundle and both compiler jobs use macOS **11.0** as the minimum.
@@ -28,12 +28,11 @@ configuration targets direct downloads and Developer ID notarization, **not
 the Mac App Store**. A store edition requires a separate public-API overlay
 implementation before submission.
 
-Optional macOS CI signing uses `APPLE_CERTIFICATE`,
-`APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`,
-`APPLE_PASSWORD` (app-specific), and `APPLE_TEAM_ID`. Missing secrets produce
-unsigned test candidates, not certified releases. Configure and validate the
-Windows certificate/signing integration before public promotion; it is not
-currently configured. No signing secrets were listed in the repository audit.
+Build-only CI runs may produce unsigned test candidates. A tag or manual run
+that creates a draft release refuses to build distributable Windows or macOS
+assets when its signing secrets are missing, and it verifies the produced
+signatures before collecting artifacts. No signing material is present in this
+checkout; configure the listed GitHub repository secrets before promotion.
 
 ## Required beta acceptance
 

@@ -1,11 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const target = process.env.FLICK_BUILD_TARGET;
 if (!/^(x86_64|aarch64)-(apple-darwin|pc-windows-msvc|unknown-linux-gnu)$/.test(target || "")) throw new Error("Missing supported build target");
 const env = { ...process.env };
 const isMacosRelease = target.endsWith("apple-darwin") && process.env.REQUIRE_MACOS_SIGNING === "true";
+const isWindowsRelease = target.endsWith("pc-windows-msvc") && process.env.REQUIRE_WINDOWS_SIGNING === "true";
 if (isMacosRelease) {
   const required = ["APPLE_CERTIFICATE", "APPLE_CERTIFICATE_PASSWORD", "APPLE_SIGNING_IDENTITY", "APPLE_ID", "APPLE_PASSWORD", "APPLE_TEAM_ID"];
   const missing = required.filter((key) => !env[key]?.trim());
@@ -18,7 +20,32 @@ if (isMacosRelease) {
 for (const key of Object.keys(env)) {
   if (key.startsWith("APPLE_") && (!env[key]?.trim() || !target.endsWith("apple-darwin"))) delete env[key];
 }
-const args = ["node_modules/@tauri-apps/cli/tauri.js", "build", "--ci", "--target", target, "--", "--locked"];
+let signingConfigDirectory;
+const args = ["node_modules/@tauri-apps/cli/tauri.js", "build", "--ci", "--target", target];
+
+if (isWindowsRelease) {
+  const required = ["FLICK_WINDOWS_CERTIFICATE_THUMBPRINT", "FLICK_WINDOWS_TIMESTAMP_URL"];
+  const missing = required.filter((key) => !env[key]?.trim());
+  if (missing.length) {
+    throw new Error(`Refusing to create a distributable Windows installer without code-signing configuration: ${missing.join(", ")}`);
+  }
+  const thumbprint = env.FLICK_WINDOWS_CERTIFICATE_THUMBPRINT.replace(/\s/g, "");
+  if (!/^[a-f\d]{40}$/i.test(thumbprint)) throw new Error("FLICK_WINDOWS_CERTIFICATE_THUMBPRINT must be a SHA-1 certificate thumbprint.");
+  const timestampUrl = env.FLICK_WINDOWS_TIMESTAMP_URL.trim();
+  if (!/^https?:\/\//i.test(timestampUrl)) throw new Error("FLICK_WINDOWS_TIMESTAMP_URL must be an HTTP(S) timestamp URL.");
+  signingConfigDirectory = mkdtempSync(join(tmpdir(), "flick-tauri-signing-"));
+  const signingConfigPath = join(signingConfigDirectory, "windows-signing.json");
+  writeFileSync(signingConfigPath, JSON.stringify({
+    bundle: { windows: {
+      certificateThumbprint: thumbprint,
+      digestAlgorithm: env.FLICK_WINDOWS_DIGEST_ALGORITHM?.trim() || "sha256",
+      timestampUrl,
+    } },
+  }));
+  args.push("--config", signingConfigPath);
+}
+
+args.push("--", "--locked");
 const build = () => execFileSync(process.execPath, args, { env, stdio: "inherit" });
 
 try {
@@ -32,4 +59,6 @@ try {
   console.warn("macOS app bundle is complete but installer packaging failed; retrying once after the disk image service settles.");
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 4_000);
   build();
+} finally {
+  if (signingConfigDirectory) rmSync(signingConfigDirectory, { recursive: true, force: true });
 }
