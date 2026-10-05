@@ -176,6 +176,7 @@ jobs:
       - name: Build installers
         env:
           FLICK_BUILD_TARGET: ${{ matrix.target }}
+          REQUIRE_MACOS_SIGNING: ${{ endsWith(matrix.target, 'apple-darwin') && 'true' || 'false' }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -183,6 +184,24 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: node scripts/build-release.mjs
+
+      # A successful bundle command is not evidence that the app will launch
+      # on a clean Mac. Verify the signed app and its stapled notarization
+      # ticket before the installer is allowed into the release artifacts.
+      - name: Verify macOS signing and notarization
+        if: endsWith(matrix.target, 'apple-darwin')
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="src-tauri/target/${{ matrix.target }}/release/bundle"
+          app="$bundle/macos/Flick.app"
+          dmg=$(find "$bundle/dmg" -maxdepth 1 -type f -name '*.dmg' -print -quit)
+          test -d "$app"
+          test -n "$dmg"
+          codesign --verify --deep --strict --verbose=4 "$app"
+          xcrun stapler validate "$app"
+          xcrun stapler validate "$dmg"
+          spctl --assess --type execute --verbose=4 "$app"
 
       - name: Test real Whisper, Moonshine and Parakeet transcription
         timeout-minutes: 20

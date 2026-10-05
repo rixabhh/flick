@@ -12,6 +12,13 @@ use crate::{
 
 pub type TargetIdentity = active_target::ActiveTarget;
 
+// Keep the reply surface intentionally small. It is a selection-adjacent
+// quick action, not a second application window. A stable footprint also
+// avoids macOS recalculating an always-on-top transparent webview while the
+// renderer expands and collapses fields.
+const COMPOSER_WIDTH: f64 = 420.0;
+const COMPOSER_HEIGHT: f64 = 360.0;
+
 fn foreground_target() -> Result<TargetIdentity, String> {
     let window =
         active_target::get().ok_or_else(|| "Flick could not verify the active app".to_string())?;
@@ -101,8 +108,8 @@ pub async fn open_from_shortcut(app: &AppHandle) {
             if let Ok(Some(monitor)) = window.monitor_from_point(pointer.x, pointer.y) {
                 let scale = monitor.scale_factor();
                 let area = monitor.work_area();
-                let width = (364.0 * scale).min(area.size.width as f64);
-                let height = (430.0 * scale).min(area.size.height as f64);
+                let width = (COMPOSER_WIDTH * scale).min(area.size.width as f64);
+                let height = (COMPOSER_HEIGHT * scale).min(area.size.height as f64);
                 let position = companion_position(
                     (pointer.x, pointer.y),
                     (area.position.x as f64, area.position.y as f64),
@@ -117,16 +124,17 @@ pub async fn open_from_shortcut(app: &AppHandle) {
                 ));
             }
         }
-        // Context and the capture error stay renderer-only for this short-lived
-        // composer session. Supplying the reason lets users recover from a
-        // clipboard or selection problem without guessing why the draft opens
-        // empty.
+        // Show the webview before delivering session data. On a cold launch a
+        // hidden webview can still be mounting its event listener; emitting
+        // first silently drops the selection and makes the composer appear
+        // flaky. The context remains in this function until the visible
+        // renderer has a chance to receive it.
+        let _ = window.show();
         let _ = app.emit_to(
             "composer",
             "flick://composer-context",
             serde_json::json!({"context": context, "error": capture_error}),
         );
-        let _ = window.show();
         let _ = window.set_focus();
     }
 }

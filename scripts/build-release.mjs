@@ -5,6 +5,14 @@ import { join } from "node:path";
 const target = process.env.FLICK_BUILD_TARGET;
 if (!/^(x86_64|aarch64)-(apple-darwin|pc-windows-msvc|unknown-linux-gnu)$/.test(target || "")) throw new Error("Missing supported build target");
 const env = { ...process.env };
+const isMacosRelease = target.endsWith("apple-darwin") && process.env.REQUIRE_MACOS_SIGNING === "true";
+if (isMacosRelease) {
+  const required = ["APPLE_CERTIFICATE", "APPLE_CERTIFICATE_PASSWORD", "APPLE_SIGNING_IDENTITY", "APPLE_ID", "APPLE_PASSWORD", "APPLE_TEAM_ID"];
+  const missing = required.filter((key) => !env[key]?.trim());
+  if (missing.length) {
+    throw new Error(`Refusing to create a distributable macOS installer without signing and notarization credentials: ${missing.join(", ")}`);
+  }
+}
 // Missing optional secrets must be absent, not empty strings: the bundler
 // treats the presence of a signing identity as an instruction to sign.
 for (const key of Object.keys(env)) {
