@@ -40,7 +40,7 @@
         "visible": true,
         "center": true,
         "decorations": false,
-        "transparent": false
+        "transparent": true
       },
       {
         "label": "toast",

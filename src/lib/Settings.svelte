@@ -711,10 +711,22 @@
 </div>
 
 <style>
+  :global(html), :global(body) {
+    margin: 0;
+    background: transparent;
+    overflow: hidden;
+  }
+
   .settings-window {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: calc(100vh - 12px);
+    margin: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 24px;
+    box-shadow: 0 20px 52px rgba(0, 0, 0, 0.3), inset 0 1px rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(28px) saturate(1.35);
+    -webkit-backdrop-filter: blur(28px) saturate(1.35);
     background:
       radial-gradient(circle at 8% -20%, rgba(143, 183, 255, 0.18), transparent 38%),
       radial-gradient(circle at 100% 12%, rgba(167, 134, 255, 0.12), transparent 34%),
