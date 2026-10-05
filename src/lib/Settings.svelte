@@ -476,22 +476,31 @@
   <div id="settings-tabpanel" class="tab-content" role="tabpanel" aria-labelledby={`settings-tab-${activeTab}`} tabindex="-1">
     {#if activeTab === "home"}
       <div class="panel-section animate-fade-in">
-        <div class="section-header"><h2 class="section-title">{t("home.title")}</h2></div>
+        <section class="home-hero">
+          <span class="home-kicker"><i></i> Your private desktop companion</span>
+          <h2>{t("home.title")}</h2>
+          <p>Select text in any app, then use a shortcut. Flick captures only that selection and stays out of your way.</p>
+        </section>
         {#if !config.onboarding_complete}
-          <div class="panel quick-card setup-card">
-            <span class="badge badge-accent">{t("home.setup")}</span>
-            <strong>Get Flick ready in three private steps</strong>
-            <ol>
-              <li><button class="setup-link" onclick={() => activeTab = "write"}>Choose an AI provider</button> for writing and reply drafts.</li>
-              <li><button class="setup-link" onclick={() => activeTab = "models"}>Download a verified local speech model</button> for offline dictation.</li>
-              <li><button class="setup-link" onclick={() => { activeTab = "dictate"; refreshInputDevices(); }}>Choose a microphone</button>; your operating system may ask for permission the first time you record.</li>
-            </ol>
-            <button class="btn btn-primary btn-sm" onclick={completeOnboarding}>I’ll finish this later</button>
-          </div>
+          <section class="onboarding-card">
+            <div><span class="badge badge-accent">{t("home.setup")}</span><strong>Three steps to your first useful result</strong></div>
+            <div class="setup-steps">
+              <button onclick={() => activeTab = "write"}><b>1</b><span><strong>Connect writing</strong><small>Choose a provider and key</small></span></button>
+              <button onclick={() => activeTab = "models"}><b>2</b><span><strong>Install speech</strong><small>Download a local model</small></span></button>
+              <button onclick={() => { activeTab = "dictate"; refreshInputDevices(); }}><b>3</b><span><strong>Choose a microphone</strong><small>Grant permission when asked</small></span></button>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick={completeOnboarding}>I’ll finish this later</button>
+          </section>
         {/if}
-        <p class="section-desc">Flick is ready for text commands and AI replies. Select a message anywhere, then press <span class="mono">{config.composer_shortcut}</span> to draft a reply.</p>
-        <div class="panel quick-card"><span class="badge badge-accent">Reply composer</span><strong>Selected-text context only</strong><span class="text-secondary">Nothing is read from the screen or saved as conversation history.</span></div>
-        <div class="panel quick-card"><span class="badge badge-muted">Offline dictation</span><strong>Local speech setup</strong><span class="text-secondary">Shortcut: <span class="mono">{config.dictation_shortcut}</span> · mode: {config.dictation_mode}</span></div>
+        <section class="shortcut-section" aria-label="Quick shortcuts">
+          <div class="section-header"><h3 class="section-title">Quick shortcuts</h3><span>Works in your focused app</span></div>
+          <div class="shortcut-grid">
+            <button class="shortcut-card reply-shortcut" onclick={() => activeTab = "write"}><span class="shortcut-icon">↗</span><span><strong>Reply to selection</strong><small>Select a message, then draft in place</small></span><kbd>{config.composer_shortcut}</kbd></button>
+            <button class="shortcut-card" onclick={() => activeTab = "dictate"}><span class="shortcut-icon">◉</span><span><strong>Start dictation</strong><small>{config.dictation_mode.replaceAll("-", " ")}</small></span><kbd>{config.dictation_shortcut}</kbd></button>
+            <button class="shortcut-card" onclick={() => activeTab = "commands"}><span class="shortcut-icon">⌁</span><span><strong>Transform text</strong><small>Type a trigger at the end of your text</small></span><kbd>!</kbd></button>
+          </div>
+        </section>
+        <div class="home-note"><span aria-hidden="true">⌁</span><p><strong>Private by design.</strong> Reply context is selected by you, never read from the screen, and never kept as conversation history.</p></div>
       </div>
     {:else if activeTab === "write"}
       <div class="panel-section animate-fade-in">
@@ -871,6 +880,19 @@
     line-height: 1.6;
   }
 
+  .home-hero { display:grid; gap:9px; max-width:530px; padding:4px 0 2px; }
+  .home-hero h2 { margin:0; color:var(--text-primary); font-size:1.65rem; line-height:1.08; letter-spacing:-.045em; }
+  .home-hero p { margin:0; color:var(--text-secondary); font-size:.88rem; line-height:1.55; }
+  .home-kicker { display:inline-flex; align-items:center; gap:7px; color:var(--accent); font-size:.7rem; font-weight:760; letter-spacing:.075em; text-transform:uppercase; }
+  .home-kicker i { width:6px; height:6px; border-radius:50%; background:var(--success); box-shadow:0 0 0 4px var(--success-dim); }
+  .onboarding-card { display:grid; gap:15px; padding:17px; border:1px solid rgba(158,194,255,.22); border-radius:16px; background:linear-gradient(145deg,rgba(129,166,239,.15),rgba(255,255,255,.03)); box-shadow:inset 0 1px rgba(255,255,255,.12),0 10px 24px rgba(0,0,0,.1); }
+  .onboarding-card > div:first-child { display:grid; gap:7px; }.onboarding-card strong { color:var(--text-primary); font-size:.9rem; }
+  .setup-steps { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }.setup-steps button { display:flex; align-items:flex-start; gap:8px; padding:9px; border:1px solid rgba(255,255,255,.09); border-radius:11px; color:inherit; background:rgba(7,9,14,.16); cursor:pointer; font:inherit; text-align:left; transition:background 140ms ease,border-color 140ms ease,transform 140ms ease; }.setup-steps button:hover { border-color:rgba(170,202,255,.32); background:rgba(255,255,255,.07); transform:translateY(-1px); }.setup-steps b { display:grid; place-items:center; width:18px; height:18px; flex:0 0 auto; border-radius:50%; color:#13213a; background:#b8d2ff; font-size:10px; }.setup-steps span { display:grid; gap:2px; min-width:0; }.setup-steps strong { font-size:.72rem; }.setup-steps small { color:var(--text-secondary); font-size:.66rem; line-height:1.35; }
+  .shortcut-section { display:grid; gap:10px; }.shortcut-section .section-header { justify-content:space-between; margin:0; }.shortcut-section .section-header > span { color:var(--text-muted); font-size:.7rem; }
+  .shortcut-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }.shortcut-card { display:grid; grid-template-columns:auto 1fr; gap:9px; min-width:0; padding:12px; border:1px solid var(--border); border-radius:14px; color:inherit; background:rgba(255,255,255,.045); cursor:pointer; font:inherit; text-align:left; transition:background 140ms ease,border-color 140ms ease,transform 140ms ease,box-shadow 140ms ease; }.shortcut-card:hover { border-color:rgba(167,199,255,.34); background:rgba(255,255,255,.085); box-shadow:0 8px 18px rgba(0,0,0,.1); transform:translateY(-1px); }.shortcut-card > span:nth-child(2) { display:grid; gap:3px; min-width:0; }.shortcut-card strong { color:var(--text-primary); font-size:.76rem; }.shortcut-card small { overflow:hidden; color:var(--text-secondary); font-size:.67rem; line-height:1.35; text-overflow:ellipsis; }.shortcut-icon { display:grid; place-items:center; width:25px; height:25px; border:1px solid rgba(170,202,255,.2); border-radius:8px; color:#c9dcff; background:rgba(122,163,237,.15); font-size:13px; }.shortcut-card kbd { grid-column:1/-1; width:max-content; padding:3px 5px; border:1px solid rgba(255,255,255,.12); border-radius:5px; color:var(--text-muted); background:rgba(0,0,0,.12); font-family:var(--font-body); font-size:.64rem; font-weight:700; }.reply-shortcut { border-color:rgba(163,197,255,.24); background:linear-gradient(145deg,rgba(117,158,239,.15),rgba(255,255,255,.035)); }
+  .home-note { display:flex; align-items:flex-start; gap:9px; padding:11px 12px; border-radius:12px; color:var(--text-secondary); background:rgba(255,255,255,.035); font-size:.72rem; line-height:1.45; }.home-note > span { color:var(--accent); font-size:15px; line-height:1; }.home-note p { margin:0; }.home-note strong { color:var(--text-primary); }
+  @media (max-width:640px) { .setup-steps,.shortcut-grid { grid-template-columns:1fr; }.shortcut-card { grid-template-columns:auto 1fr auto; align-items:center; }.shortcut-card kbd { grid-column:auto; }.shortcut-card small { white-space:normal; } }
+
   .provider-controls {
     display: grid;
     grid-template-columns: minmax(132px, 0.72fr) minmax(0, 1.28fr);
@@ -1041,28 +1063,4 @@
     color: var(--text-primary);
   }
 
-  .setup-card {
-    gap: var(--space-sm);
-    border-color: var(--accent);
-  }
-
-  .setup-card ol {
-    margin: 0;
-    padding-left: 1.25rem;
-    color: var(--text-secondary);
-    font-size: 0.82rem;
-    line-height: 1.65;
-  }
-
-  .setup-link {
-    appearance: none;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--accent);
-    font: inherit;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-    cursor: pointer;
-  }
 </style>

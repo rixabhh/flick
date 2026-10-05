@@ -100,7 +100,7 @@ test("recording pill uses the session provider, not a later settings change", as
   await emit(page, "flick://dictation-state", "transcribing");
   await expect(page.locator(".overlay")).not.toContainText("cloud");
   await expect(page.locator(".pill")).toHaveCSS("height", "36px");
-  await expect(page.locator(".pill")).toHaveCSS("width", "194px");
+  await expect(page.locator(".pill")).toHaveCSS("width", "164px");
   await expect(page.locator(".spinner")).toHaveCSS("animation-name", "none");
 });
 
@@ -159,7 +159,7 @@ test("microphone startup is never presented as active recording", async ({ page 
   await expect(page.locator(".wave")).toHaveCount(0);
   await emit(page, "flick://dictation-state", "recording");
   await expect(page.locator(".overlay strong")).toHaveText("Recording");
-  await expect(page.locator(".pill")).toHaveCSS("width", "164px");
+  await expect(page.locator(".pill")).toHaveCSS("width", "148px");
 });
 
 test("large model libraries filter variants and paginate without hiding installed models", async ({ page }) => {

@@ -71,6 +71,7 @@ pub fn run() {
             commands::export_command_templates,
             commands::import_command_templates,
             composer::capture_reply_context,
+            composer::composer_session_context,
             composer::generate_reply,
             composer::insert_reply,
             composer::copy_reply,
@@ -122,6 +123,7 @@ pub fn run() {
             app.manage(ComposerTargetState {
                 target: Mutex::new(None),
             });
+            app.manage(composer::ComposerSessionState::default());
             app.manage(dictation::DictationState::new());
             app.manage(dictation::DictationTargetState::default());
             app.manage(history::RecentResultState::default());

@@ -49,6 +49,7 @@ export async function mockDesktop(page, label = "settings", overrides = {}) {
         if (command === "set_shortcut_capture") return;
         if (command === "generate_reply") return "Thanks, that works for me.";
         if (command === "capture_reply_context") return "Selected conversation";
+        if (command === "composer_session_context") return null;
         if (command === "plugin:autostart|is_enabled") return false;
         if (command.startsWith("plugin:") || ["download_local_model", "cancel_local_model_download", "apply_floating_pill_position", "insert_reply", "copy_reply", "test_api_connection"].includes(command)) return;
         if (["get_history", "list_input_devices", "list_dictation_providers"].includes(command)) return [];

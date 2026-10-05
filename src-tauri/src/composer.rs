@@ -1,8 +1,10 @@
 //! Privacy-first conversational reply drafting.
 //!
-//! The composer deliberately captures only an explicit selection. It stores no
-//! context or drafts: the Svelte window owns that short-lived state.
+//! The composer deliberately captures only an explicit selection. It retains
+//! that context in process memory only long enough for a cold companion webview
+//! to hydrate; it never persists context or drafts.
 
+use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::time::{sleep, Duration};
 
@@ -11,6 +13,20 @@ use crate::{
 };
 
 pub type TargetIdentity = active_target::ActiveTarget;
+
+/// An in-memory handoff for a just-captured selection. This is deliberately
+/// never persisted; it only lets a newly-created webview retrieve context if
+/// its event listener was not mounted when the companion first became visible.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ComposerSessionContext {
+    context: String,
+    error: Option<String>,
+}
+
+#[derive(Default)]
+pub struct ComposerSessionState {
+    context: Mutex<Option<ComposerSessionContext>>,
+}
 
 // Keep the reply surface intentionally small. It is a selection-adjacent
 // quick action, not a second application window. A stable footprint also
@@ -42,6 +58,25 @@ fn remember_target(app: &AppHandle, target: Option<TargetIdentity>) {
     }
 }
 
+fn remember_context(app: &AppHandle, context: ComposerSessionContext) {
+    if let Some(state) = app.try_state::<ComposerSessionState>() {
+        if let Ok(mut remembered) = state.context.lock() {
+            *remembered = Some(context);
+        }
+    }
+}
+
+#[tauri::command]
+pub fn composer_session_context(app: AppHandle) -> Option<ComposerSessionContext> {
+    app.try_state::<ComposerSessionState>().and_then(|state| {
+        state
+            .context
+            .lock()
+            .ok()
+            .and_then(|context| context.clone())
+    })
+}
+
 fn target_is_still_appropriate(app: &AppHandle) -> Result<bool, String> {
     let expected = app
         .try_state::<ComposerTargetState>()
@@ -69,7 +104,8 @@ fn current_target_is_protected(app: &AppHandle) -> bool {
 }
 
 /// Captures an explicit selection before the composer window is shown. Drafts
-/// and context remain in the renderer only for the lifetime of that window.
+/// remain in the renderer; captured context has only a short-lived, in-memory
+/// handoff so a newly opened renderer can hydrate reliably.
 pub async fn open_from_shortcut(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("composer") {
         if window.is_visible().unwrap_or(false) {
@@ -83,8 +119,8 @@ pub async fn open_from_shortcut(app: &AppHandle) {
     // that monitor, bounded by its usable work area (including scaled screens).
     let pointer = app.cursor_position().ok();
     // Capture identity before Flick's own window is visible. The selected text
-    // itself remains renderer-only and is deliberately not stored here. This
-    // check belongs here—not only in the global hook—because CLI and tray
+    // is retained only in the in-memory handoff below. This check belongs
+    // here—not only in the global hook—because CLI and tray
     // actions can enter the composer without passing through that hook.
     let (context, capture_error) = if current_target_is_protected(app) {
         remember_target(app, None);
@@ -103,6 +139,11 @@ pub async fn open_from_shortcut(app: &AppHandle) {
             }
         }
     };
+    let session_context = ComposerSessionContext {
+        context,
+        error: capture_error,
+    };
+    remember_context(app, session_context.clone());
     if let Some(window) = app.get_webview_window("composer") {
         if let Some(pointer) = pointer {
             if let Ok(Some(monitor)) = window.monitor_from_point(pointer.x, pointer.y) {
@@ -130,11 +171,11 @@ pub async fn open_from_shortcut(app: &AppHandle) {
         // flaky. The context remains in this function until the visible
         // renderer has a chance to receive it.
         let _ = window.show();
-        let _ = app.emit_to(
-            "composer",
-            "flick://composer-context",
-            serde_json::json!({"context": context, "error": capture_error}),
-        );
+        // This short yield covers a cold webview on lower-powered systems. The
+        // renderer also requests ComposerSessionState during mount, so the
+        // selected text cannot be lost if mounting takes longer than this.
+        sleep(Duration::from_millis(80)).await;
+        let _ = app.emit_to("composer", "flick://composer-context", session_context);
         let _ = window.set_focus();
     }
 }
