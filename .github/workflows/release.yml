@@ -4,12 +4,8 @@ on:
     tags: ['v*']
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Existing v<version> tag (leave empty for a main build-only run)'
-        required: false
-        type: string
       create_draft:
-        description: 'Create an unpublished release draft after every platform succeeds'
+        description: 'Create an unpublished release draft when running from a v<version> tag'
         required: true
         type: boolean
         default: false
@@ -18,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ inputs.tag || github.ref }}
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -31,7 +27,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
@@ -39,8 +34,8 @@ jobs:
       - id: metadata
         name: Validate source, versions and release intent
         env:
-          RELEASE_TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
-          CREATE_RELEASE: ${{ github.event_name == 'push' || inputs.create_draft == true }}
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          CREATE_RELEASE: ${{ github.ref_type == 'tag' || inputs.create_draft == true }}
         run: node scripts/validate-release.mjs --check
 
   browser-smoke:

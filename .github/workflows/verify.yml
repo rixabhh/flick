@@ -7,7 +7,7 @@ on:
 
 # A newer commit fully supersedes an earlier verification run for the same
 # branch. This prevents documentation-only pushes from starving the current
-# cross-platform release candidate in the hosted runner queue.
+# cross-platform release verification in the hosted runner queue.
 concurrency:
   group: verify-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

@@ -13,8 +13,6 @@
 
 Flick is not another document editor or chat tab. It appears only when you invoke a command or shortcut, uses the text you deliberately select, and gives you the final say before anything is inserted.
 
-> **Release status:** Flick 2.0.1 is a release candidate. The available Windows installers are **unsigned**, and macOS release builds require Developer ID signing and notarization. Do not treat a candidate as a certified public release; see the [release checklist](RELEASE_CHECKLIST.md).
-
 ## What Flick helps with
 
 | When you need to… | Use Flick to… |
@@ -27,9 +25,9 @@ Flick is not another document editor or chat tab. It appears only when you invok
 
 ### 1. Install and allow the required permissions
 
-Download the candidate that matches your machine from [GitHub Releases](https://github.com/rixabhh/flick/releases). When the operating system asks, grant microphone access for dictation and the accessibility/input permission needed for global shortcuts and safe text insertion.
+Download the build that matches your machine from [GitHub Releases](https://github.com/rixabhh/flick/releases). When the operating system asks, grant microphone access for dictation and the accessibility/input permission needed for global shortcuts and safe text insertion.
 
-Candidate download names use the target architecture:
+Download names use the target architecture:
 
 - **Windows:** `x64` for most Intel/AMD PCs; `arm64` for Windows on ARM.
 - **macOS:** `aarch64` for Apple Silicon; `x64` for Intel Macs.
