@@ -15,12 +15,12 @@ test("product page reveals its full story on scroll", async ({ page }) => {
 test("product page has a usable setup tutorial and mobile navigation", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/docs/index.html");
-  await expect(page.locator("#start li")).toHaveCount(4);
+  await expect(page.locator("#how-it-works li")).toHaveCount(4);
   const menu = page.locator("[data-menu-toggle]");
   await menu.click();
   await expect(menu).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator("[data-nav]")).toHaveClass(/is-open/);
-  await page.locator('[data-nav] a[href="#start"]').click();
+  await page.locator('[data-nav] a[href="#how-it-works"]').click();
   await expect(menu).toHaveAttribute("aria-expanded", "false");
 });
 
@@ -30,9 +30,17 @@ test("product page works on a narrow screen without JavaScript", async ({ browse
   await page.goto("http://127.0.0.1:1420/docs/index.html");
   await expect(page.locator(".hero-copy")).toHaveCSS("opacity", "1");
   await expect(page.locator(".closing")).toHaveCSS("opacity", "1");
-  await expect(page.locator('[data-nav] a[href="#start"]')).toBeVisible();
+  await expect(page.locator('[data-nav] a[href="#how-it-works"]')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await context.close();
+});
+
+test("product previews show the compact companion surfaces", async ({ page }) => {
+  await page.goto("/docs/index.html");
+  await expect(page.locator(".hero-art .actual-pill").first()).toHaveCSS("border-radius", "999px");
+  await page.locator('[data-step="1"]').scrollIntoViewIfNeeded();
+  await expect(page.locator('[data-stage="1"] .selected-context')).toContainText("CAPTURED SELECTION");
+  await expect(page.locator('[data-stage="1"] .tone-row')).toContainText("Professional");
 });
 
 test("product page respects the reduced-motion preference", async ({ page }) => {

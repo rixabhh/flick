@@ -20,3 +20,21 @@
 .brand img{background:var(--ink);padding:4px}
 .step{opacity:.7}.step.is-active{opacity:1}
 :focus-visible{outline:2px solid #688a18;outline-offset:5px}
+
+/* The product previews deliberately match Flick's real companion surfaces:
+   status remains a compact transparent capsule, while reply gets one focused
+   composer. The surrounding card is the user's app, never Flick's backdrop. */
+.actual-surface{background:linear-gradient(150deg,#272925,#1c1e1b)}
+.actual-pill{border-radius:999px!important}
+.processing-card.actual-pill{min-width:0;padding:7px 11px;background:rgba(34,36,32,.92);box-shadow:0 10px 24px rgba(0,0,0,.24)}
+.processing-card.actual-pill strong{font-size:9px;font-weight:720}
+.voice-chip.actual-pill{gap:7px;padding:7px 10px;border-radius:999px;background:rgba(34,36,32,.94)}
+.voice-chip.actual-pill strong{font-size:9px;font-weight:680}
+.voice-chip.actual-pill .voice-bars{height:15px}
+.voice-chip.actual-pill .voice-bars i{width:2px;height:6px}.voice-chip.actual-pill .voice-bars i:nth-child(2){height:11px}.voice-chip.actual-pill .voice-bars i:nth-child(3){height:14px}.voice-chip.actual-pill .voice-bars i:nth-child(4){height:10px}
+.tone-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:9px 0}.tone-row>small{color:#bbc99b;font-size:8px;font-weight:760;letter-spacing:.12em}.tone-row .tone-picker{margin:0}.tone-row .tone-picker b{color:#263018;background:var(--lime);border-color:var(--lime)}
+.stage-reply{border-radius:20px;background:linear-gradient(150deg,#34362e,#242520);box-shadow:inset 0 1px rgba(255,255,255,.09)}
+.stage-reply .reply-head>span{border-radius:999px}.stage-reply .reply-actions b{border-radius:999px}.stage-reply .reply-actions span{border-radius:999px}
+.stage-dictate{display:grid;place-items:center;background:radial-gradient(circle at 50% 50%,rgba(214,255,114,.2),transparent 31%),#ded9cf;color:var(--ink)}
+.dictation-empty{display:grid;place-items:center;gap:18px;text-align:center}.dictation-empty>p{margin:0;color:#706d65;font-size:11px}.dictation-empty>small{max-width:240px;color:#706d65;font-size:9px}.dictation-pill{display:flex;align-items:center;gap:8px;padding:8px 11px;border:1px solid rgba(23,23,21,.18);color:#f7f8ef;background:rgba(35,37,32,.95);box-shadow:0 12px 25px rgba(31,30,26,.2);font-size:10px}.dictation-pill .voice-bars{height:17px}.dictation-pill .voice-bars i{background:#d6ff72}.dictation-pill em{width:7px;height:7px;border:2px solid rgba(214,255,114,.35);border-top-color:#d6ff72;border-radius:50%;animation:rotate .8s linear infinite}
+@media(max-width:590px){.actual-surface{min-height:283px}.voice-chip.actual-pill{bottom:10px}.dictation-pill{max-width:92%;font-size:9px}.tone-row{gap:4px}.tone-row .tone-picker{gap:3px}.tone-picker span,.tone-picker b{padding:4px 5px}}
