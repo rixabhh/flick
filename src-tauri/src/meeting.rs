@@ -34,6 +34,40 @@ pub struct MeetingSession {
     pub config: crate::config::FlickConfig,
     /// Target app at session start
     pub target_at_start: crate::active_target::ActiveTarget,
+    /// Whether in meeting mode
+    pub is_meeting_mode: bool,
+    /// Cached speaker diarization results (populated after transcription)
+    pub diarization_results: Option<Vec<SpeakerSegment>>,
+}
+
+impl MeetingSession {
+    /// Create a new meeting session
+    pub fn new(config: crate::config::FlickConfig, target: crate::active_target::ActiveTarget) -> Self {
+        MeetingSession {
+            id: uuid::Uuid::new_v4().to_string(),
+            started_at: std::time::Instant::now(),
+            audio_samples: Vec::new(),
+            is_recording: false,
+            speaker_labels: Vec::new(),
+            config,
+            target_at_start: target,
+            is_meeting_mode: false,
+            diarization_results: None,
+        }
+    }
+}
+
+/// Speaker segment with attribution.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SpeakerSegment {
+    /// Start time in milliseconds
+    pub start_ms: u64,
+    /// End time in milliseconds
+    pub end_ms: u64,
+    /// Speaker label (e.g., "Speaker_0", "You", "Participant_1")
+    pub speaker: String,
+    /// Transcribed text for this segment
+    pub text: String,
 }
 
 /// Metadata for a saved meeting note.
@@ -157,7 +191,7 @@ pub async fn stop_meeting_session(
     // and would use the collected audio samples
 
     // For now, return an error indicating this needs session state management
-    bail!("Meeting session state management needs implementation - see MeetingSession struct")
+    Err("Meeting session state management needs implementation - see MeetingSession struct".to_string())
 }
 
 /// Save a meeting note to the notes database.
