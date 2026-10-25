@@ -11,6 +11,8 @@
   let level = $state(0);
   let elapsed = $state(0);
   let hasSession = false;
+  let isMeetingMode = $state(false);
+  let showMeetingToggle = $state(false);
   const t = (key) => translate(language, key);
 
   async function refreshPresentationConfig() {
@@ -36,13 +38,15 @@
     let disposed = false;
     const disposers = [];
     const levelTimer = setInterval(async () => {
-      if (state !== "recording") return;
+      if (state !== "recording" && state !== "meeting_recording") return;
       try {
         const next = Number(await invoke("dictation_input_level")) || 0;
         level = level * 0.62 + next * 0.38;
       } catch {}
     }, 70);
-    const clockTimer = setInterval(() => { if (state === "recording") elapsed += 1; }, 1000);
+    const clockTimer = setInterval(() => { 
+      if (state === "recording" || state === "meeting_recording") elapsed += 1; 
+    }, 1000);
 
     void (async () => {
       const disposeSession = await listen("flick://dictation-session", ({ payload }) => {
@@ -55,6 +59,10 @@
         state = nextState;
         language = payload.app_language === "es" ? "es" : "en";
         cloudTranscription = payload.provider_id === "cloud-openai-compatible";
+        // Also update meeting mode state if present
+        if (payload.meeting_mode !== undefined) {
+          isMeetingMode = payload.meeting_mode;
+        }
       });
       if (disposed) { disposeSession(); return; }
       disposers.push(disposeSession);
@@ -77,7 +85,9 @@
     ? t("dictation.starting")
     : state === "transcribing"
       ? t(cloudTranscription ? "dictation.transcribingCloud" : "dictation.transcribing")
-      : t("dictation.recording");
+      : state === "meeting_recording"
+        ? t("meeting.recording")
+        : t("dictation.recording");
 </script>
 
 <main class="stage overlay" aria-live="polite" aria-label={`Dictation ${label()}`}>
@@ -102,6 +112,8 @@
   .pill { position:relative; isolation:isolate; width:min(100vw,164px); height:min(100vh,36px); display:grid; grid-template-columns:18px 15px minmax(0,1fr); align-items:center; gap:6px; padding:0 10px; box-sizing:border-box; overflow:hidden; border:1px solid rgba(255,255,255,.18); border-radius:999px; background:linear-gradient(145deg,rgba(57,59,67,.84),rgba(25,26,32,.9)); box-shadow:0 12px 30px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.16); backdrop-filter:blur(30px) saturate(1.5); -webkit-backdrop-filter:blur(30px) saturate(1.5); transition:background 180ms ease,border-color 180ms ease; }
   .pill::before { content:""; position:absolute; z-index:-1; inset:0; border-radius:inherit; background:radial-gradient(110px 34px at 28% -8%,rgba(255,255,255,.17),transparent 72%); pointer-events:none; }
   .pill.recording { grid-template-columns:17px 1fr auto; background:linear-gradient(145deg,rgba(48,48,53,.78),rgba(18,19,22,.86)); }
+  .pill.meeting-recording { grid-template-columns:17px 1fr auto; background:linear-gradient(145deg,rgba(30, 64, 175, .8),rgba(15, 32, 67, .9)); border-color:rgba(0, 122, 255, .3); }
+  .pill.meeting-recording::before { background:radial-gradient(110px 34px at 28% -8%,rgba(0, 122, 255, .2),transparent 72%); }
   .status-dot { width:7px; height:7px; justify-self:center; border-radius:50%; background:rgba(185,190,202,.48); box-shadow:0 0 0 4px rgba(190,198,214,.06); }
   .status-dot.live { background:#ff6b78; box-shadow:0 0 0 4px rgba(255,93,111,.09),0 0 10px rgba(255,89,108,.46); animation:pulse 1.9s ease-out infinite; }
   .wave { height:19px; display:flex; align-items:center; justify-content:center; gap:3px; }
