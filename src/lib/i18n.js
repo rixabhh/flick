@@ -132,6 +132,13 @@ const messages = {
     "transform.failed": "No se pudo transformar",
     "transform.copied": "Copiado al portapapeles",
     "dictation.discard": "Pulsa Esc para descartar",
+    "meeting.start": "Start meeting transcription",
+    "meeting.stop": "Stop meeting transcription",
+    "meeting.note_saved": "Meeting note saved",
+    "meeting.search": "Search notes",
+    "meeting.error_not_recording": "Meeting is not currently recording",
+    "meeting.error_no_audio": "No audio captured. Check your microphone.",
+    "meeting.error_transcription": "Transcription failed",
   },
 };
 
