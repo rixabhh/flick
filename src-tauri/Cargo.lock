@@ -1628,6 +1628,7 @@ dependencies = [
  "cpal",
  "enigo",
  "futures-util",
+ "hex",
  "hound",
  "keyring",
  "log",

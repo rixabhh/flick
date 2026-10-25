@@ -112,6 +112,8 @@ pub struct FlickConfig {
     #[serde(default)]
     pub local_models: Vec<LocalModel>,
     #[serde(default)]
+    pub models_dir: Option<PathBuf>,
+    #[serde(default)]
     pub disabled_apps: Vec<String>,
     #[serde(default)]
     pub auto_submit_apps: Vec<String>,
@@ -225,6 +227,7 @@ impl Default for FlickConfig {
             recording_retention_count: default_recording_retention_count(),
             history_limit: default_history_limit(),
             local_models: Vec::new(),
+            models_dir: None,
             disabled_apps: Vec::new(),
             auto_submit_apps: Vec::new(),
         }

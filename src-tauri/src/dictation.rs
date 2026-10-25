@@ -655,10 +655,7 @@ async fn stop_and_transcribe_inner(app: &AppHandle) -> Result<DictationResult> {
     }
     let provider = crate::dictation_provider::provider_info(&settings.dictation_provider)?;
     if provider.requires_local_model
-        && !crate::models::model_supports_language(
-            &settings.dictation_model_id,
-            &settings.dictation_language,
-        )?
+        && !crate::models::model_supports_hinglish(&settings.dictation_model_id)?
     {
         bail!(
             "The selected local speech model does not support {}. Choose Auto, English, or a compatible model.",
