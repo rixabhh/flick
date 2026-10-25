@@ -40,23 +40,6 @@ pub struct MeetingSession {
     pub diarization_results: Option<Vec<SpeakerSegment>>,
 }
 
-impl MeetingSession {
-    /// Create a new meeting session
-    pub fn new(config: crate::config::FlickConfig, target: crate::active_target::ActiveTarget) -> Self {
-        MeetingSession {
-            id: uuid::Uuid::new_v4().to_string(),
-            started_at: std::time::Instant::now(),
-            audio_samples: Vec::new(),
-            is_recording: false,
-            speaker_labels: Vec::new(),
-            config,
-            target_at_start: target,
-            is_meeting_mode: false,
-            diarization_results: None,
-        }
-    }
-}
-
 /// Speaker segment with attribution.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SpeakerSegment {
@@ -191,7 +174,7 @@ pub async fn stop_meeting_session(
     // and would use the collected audio samples
 
     // For now, return an error indicating this needs session state management
-    Err("Meeting session state management needs implementation - see MeetingSession struct".to_string())
+    bail!("Meeting session state management needs implementation - see MeetingSession struct")
 }
 
 /// Save a meeting note to the notes database.
