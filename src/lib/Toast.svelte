@@ -3,6 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { onMount } from "svelte";
+  import { Check, CircleAlert, LoaderCircle } from "@lucide/svelte";
   import { translate } from "./i18n.js";
 
   let state = $state("idle");
@@ -33,11 +34,11 @@
   {#if state !== "idle"}
     <section class="pill" class:error={state === "error"} role={state === "error" ? "alert" : "status"}>
       {#if state === "transforming"}
-        <span class="spinner" aria-hidden="true"></span><strong>{t("transform.transforming")}</strong>
+        <span class="spinner" aria-hidden="true"><LoaderCircle size={13} strokeWidth={2.4} /></span><strong>{t("transform.transforming")}</strong>
       {:else if state === "error"}
-        <span class="icon warning" aria-hidden="true">!</span><strong aria-label={errorMessage}>{t("transform.failed")}</strong>
+        <span class="icon warning" aria-hidden="true"><CircleAlert size={11} strokeWidth={2.5} /></span><strong aria-label={errorMessage}>{t("transform.failed")}</strong>
       {:else}
-        <span class="icon success" aria-hidden="true">✓</span><strong>{state === "notice" ? noticeMessage : t("transform.replaced")}</strong>
+        <span class="icon success" aria-hidden="true"><Check size={11} strokeWidth={3} /></span><strong>{state === "notice" ? noticeMessage : t("transform.replaced")}</strong>
       {/if}
     </section>
   {/if}
@@ -53,11 +54,11 @@
   .icon{display:grid;flex:0 0 18px;place-items:center;width:18px;height:18px;border-radius:50%;font-size:10px;font-weight:760}
   .success{color:#bdf3d0;background:rgba(73,190,116,.18);border:1px solid rgba(133,229,167,.2)}
   .warning{color:#ffd0d2;background:rgba(255,91,103,.14);border:1px solid rgba(255,139,148,.2)}
-  .spinner{width:13px;height:13px;box-sizing:border-box;border:1.5px solid rgba(203,216,245,.18);border-top-color:rgba(220,231,255,.92);border-radius:50%;animation:spin .72s linear infinite}
+  .spinner{flex:0 0 13px;display:grid;place-items:center;color:rgba(220,231,255,.92);animation:spin .72s linear infinite}
   strong{min-width:0;overflow:hidden;font-size:11px;font-weight:620;line-height:1.15;letter-spacing:-.01em;text-overflow:ellipsis;white-space:nowrap}
   @keyframes spin{to{transform:rotate(1turn)}}
-  @media (prefers-color-scheme:light){.pill{color:rgba(22,24,30,.8);background:linear-gradient(145deg,rgba(255,255,255,.8),rgba(235,237,243,.75));border-color:rgba(34,39,52,.13);box-shadow:0 10px 28px rgba(30,37,51,.17),inset 0 1px rgba(255,255,255,.88)}.spinner{border-color:rgba(38,49,75,.15);border-top-color:rgba(43,56,87,.78)}}
+  @media (prefers-color-scheme:light){.pill{color:rgba(22,24,30,.8);background:linear-gradient(145deg,rgba(255,255,255,.8),rgba(235,237,243,.75));border-color:rgba(34,39,52,.13);box-shadow:0 10px 28px rgba(30,37,51,.17),inset 0 1px rgba(255,255,255,.88)}.spinner{color:rgba(43,56,87,.78)}}
   :global(:root[data-theme="light"]) .pill{color:rgba(22,24,30,.8);background:linear-gradient(145deg,rgba(255,255,255,.8),rgba(235,237,243,.75));border-color:rgba(34,39,52,.13);box-shadow:0 10px 28px rgba(30,37,51,.17),inset 0 1px rgba(255,255,255,.88)}
-  :global(:root[data-theme="light"]) .spinner{border-color:rgba(38,49,75,.15);border-top-color:rgba(43,56,87,.78)}
+  :global(:root[data-theme="light"]) .spinner{color:rgba(43,56,87,.78)}
   @media (prefers-reduced-motion:reduce){.stage,.pill,.spinner{animation:none;transition:none}}
 </style>

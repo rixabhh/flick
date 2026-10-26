@@ -3,6 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
   import { translate } from "./i18n.js";
+  import { LoaderCircle } from "@lucide/svelte";
 
   const BAR_SHAPE = [0.58, 0.82, 1, 0.74, 0.92, 0.66, 0.48];
   let state = $state("idle");
@@ -91,7 +92,7 @@
 </script>
 
 <main class="stage overlay" aria-live="polite" aria-label={`Dictation ${label()}`}>
-  <section class="pill" class:recording={state === "recording"}>
+  <section class="pill" class:recording={state === "recording"} class:meetingRec={state === "meeting_recording"}>
     <span class="status-dot" class:live={state === "recording"} aria-hidden="true"></span>
     {#if state === "recording"}
       <span class="wave" aria-hidden="true">
@@ -100,7 +101,7 @@
       <span class="timer">{clock()}</span>
       <strong class="sr-only">{label()}</strong>
     {:else}
-      <span class="spinner" aria-hidden="true"></span>
+      <span class="spinner" aria-hidden="true"><LoaderCircle size={12} strokeWidth={2.4} /></span>
       <strong>{label()}</strong>
     {/if}
   </section>
@@ -112,22 +113,22 @@
   .pill { position:relative; isolation:isolate; width:min(100vw,164px); height:min(100vh,36px); display:grid; grid-template-columns:18px 15px minmax(0,1fr); align-items:center; gap:6px; padding:0 10px; box-sizing:border-box; overflow:hidden; border:1px solid rgba(255,255,255,.18); border-radius:999px; background:linear-gradient(145deg,rgba(57,59,67,.84),rgba(25,26,32,.9)); box-shadow:0 12px 30px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.16); backdrop-filter:blur(30px) saturate(1.5); -webkit-backdrop-filter:blur(30px) saturate(1.5); transition:background 180ms ease,border-color 180ms ease; }
   .pill::before { content:""; position:absolute; z-index:-1; inset:0; border-radius:inherit; background:radial-gradient(110px 34px at 28% -8%,rgba(255,255,255,.17),transparent 72%); pointer-events:none; }
   .pill.recording { grid-template-columns:17px 1fr auto; background:linear-gradient(145deg,rgba(48,48,53,.78),rgba(18,19,22,.86)); }
-  .pill.meeting-recording { grid-template-columns:17px 1fr auto; background:linear-gradient(145deg,rgba(30, 64, 175, .8),rgba(15, 32, 67, .9)); border-color:rgba(0, 122, 255, .3); }
-  .pill.meeting-recording::before { background:radial-gradient(110px 34px at 28% -8%,rgba(0, 122, 255, .2),transparent 72%); }
+  .pill.meetingRec { grid-template-columns:17px 1fr auto; background:linear-gradient(145deg,rgba(30, 64, 175, .8),rgba(15, 32, 67, .9)); border-color:rgba(0, 122, 255, .3); }
+  .pill.meetingRec::before { background:radial-gradient(110px 34px at 28% -8%,rgba(0, 122, 255, .2),transparent 72%); }
   .status-dot { width:7px; height:7px; justify-self:center; border-radius:50%; background:rgba(185,190,202,.48); box-shadow:0 0 0 4px rgba(190,198,214,.06); }
   .status-dot.live { background:#ff6b78; box-shadow:0 0 0 4px rgba(255,93,111,.09),0 0 10px rgba(255,89,108,.46); animation:pulse 1.9s ease-out infinite; }
   .wave { height:19px; display:flex; align-items:center; justify-content:center; gap:3px; }
   .wave i { width:3px; min-height:3px; max-height:18px; border-radius:99px; background:linear-gradient(180deg,#ff9ba4,#ff6372); box-shadow:0 0 6px rgba(255,94,112,.18); transition:height 70ms linear,opacity 120ms ease; }
   .timer { color:rgba(244,245,249,.58); font-size:11px; font-variant-numeric:tabular-nums; letter-spacing:.01em; }
-  .spinner { width:12px; height:12px; box-sizing:border-box; border:1.5px solid rgba(205,218,246,.2); border-top-color:rgba(219,230,255,.9); border-radius:50%; animation:spin .72s linear infinite; }
+  .spinner { justify-self:center; display:grid; place-items:center; width:12px; height:12px; color:rgba(219,230,255,.9); animation:spin .72s linear infinite; }
   strong { min-width:0; overflow:hidden; color:rgba(250,250,252,.82); font-size:11.5px; font-weight:560; letter-spacing:-.01em; text-overflow:ellipsis; white-space:nowrap; }
   .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
   @keyframes spin { to { transform:rotate(1turn); } }
   @keyframes pulse { 0% { box-shadow:0 0 0 0 rgba(255,93,111,.28),0 0 10px rgba(255,89,108,.4); } 70%,100% { box-shadow:0 0 0 7px transparent,0 0 10px rgba(255,89,108,.32); } }
-  @media (prefers-color-scheme:light) { .stage { color:#202126; } .pill,.pill.recording { background:linear-gradient(145deg,rgba(255,255,255,.78),rgba(235,237,243,.74)); border-color:rgba(34,39,52,.13); box-shadow:0 10px 28px rgba(30,37,51,.18),inset 0 1px rgba(255,255,255,.86); } strong { color:rgba(22,24,30,.78); } .timer { color:rgba(28,30,38,.52); } .spinner { border-color:rgba(38,49,75,.15); border-top-color:rgba(43,56,87,.78); } }
+  @media (prefers-color-scheme:light) { .stage { color:#202126; } .pill,.pill.recording { background:linear-gradient(145deg,rgba(255,255,255,.78),rgba(235,237,243,.74)); border-color:rgba(34,39,52,.13); box-shadow:0 10px 28px rgba(30,37,51,.18),inset 0 1px rgba(255,255,255,.86); } strong { color:rgba(22,24,30,.78); } .timer { color:rgba(28,30,38,.52); } .spinner { color:rgba(43,56,87,.78); } }
   :global(:root[data-theme="light"]) .pill { background:linear-gradient(145deg,rgba(255,255,255,.78),rgba(235,237,243,.74)); border-color:rgba(34,39,52,.13); box-shadow:0 10px 28px rgba(30,37,51,.18),inset 0 1px rgba(255,255,255,.86); }
   :global(:root[data-theme="light"]) strong { color:rgba(22,24,30,.78); }
   :global(:root[data-theme="light"]) .timer { color:rgba(28,30,38,.52); }
-  :global(:root[data-theme="light"]) .spinner { border-color:rgba(38,49,75,.15); border-top-color:rgba(43,56,87,.78); }
+  :global(:root[data-theme="light"]) .spinner { color:rgba(43,56,87,.78); }
   @media (prefers-reduced-motion:reduce) { .pill,.status-dot,.spinner { animation:none; } .wave i { transition:none; } }
 </style>

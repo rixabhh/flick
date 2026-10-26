@@ -13,6 +13,7 @@
   import { formatCorrections, parseCorrections } from "./dictation-settings.js";
   import { supportedLanguages, translate } from "./i18n.js";
   import logoUrl from "../assets/flick-logo.png";
+  import { X, Key, Terminal, SlidersHorizontal, Info, Mic, PenLine, Sparkles, ShieldCheck } from "@lucide/svelte";
 
   let config = $state({
     enabled: true,
@@ -418,10 +419,7 @@
         <span class="app-name">Flick</span>
       </div>
       <button class="close-btn" onclick={closeWindow} title="Close">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
+        <X size={14} strokeWidth={2} />
       </button>
     </div>
   </div>
@@ -440,32 +438,13 @@
         onkeydown={(event) => handleTabKeydown(event, index)}
       >
         {#if tab.icon === "key"}
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
-          </svg>
+          <Key size={15} strokeWidth={2} />
         {:else if tab.icon === "terminal"}
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="4 17 10 11 4 5"/>
-            <line x1="12" y1="19" x2="20" y2="19"/>
-          </svg>
+          <Terminal size={15} strokeWidth={2} />
         {:else if tab.icon === "sliders"}
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="4" y1="21" x2="4" y2="14"/>
-            <line x1="4" y1="10" x2="4" y2="3"/>
-            <line x1="12" y1="21" x2="12" y2="12"/>
-            <line x1="12" y1="8" x2="12" y2="3"/>
-            <line x1="20" y1="21" x2="20" y2="16"/>
-            <line x1="20" y1="12" x2="20" y2="3"/>
-            <line x1="1" y1="14" x2="7" y2="14"/>
-            <line x1="9" y1="8" x2="15" y2="8"/>
-            <line x1="17" y1="16" x2="23" y2="16"/>
-          </svg>
+          <SlidersHorizontal size={15} strokeWidth={2} />
         {:else}
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="16" x2="12" y2="12"/>
-            <line x1="12" y1="8" x2="12.01" y2="8"/>
-          </svg>
+          <Info size={15} strokeWidth={2} />
         {/if}
         <span>{t(tab.labelKey)}</span>
       </button>
@@ -495,20 +474,18 @@
         <section class="shortcut-section" aria-label="Quick shortcuts">
           <div class="section-header"><h3 class="section-title">Quick shortcuts</h3><span>Works in your focused app</span></div>
           <div class="shortcut-grid">
-            <button class="shortcut-card reply-shortcut" onclick={() => activeTab = "write"}><span class="shortcut-icon">↗</span><span><strong>Reply to selection</strong><small>Select a message, then draft in place</small></span><kbd>{config.composer_shortcut}</kbd></button>
-            <button class="shortcut-card" onclick={() => activeTab = "dictate"}><span class="shortcut-icon">◉</span><span><strong>Start dictation</strong><small>{config.dictation_mode.replaceAll("-", " ")}</small></span><kbd>{config.dictation_shortcut}</kbd></button>
-            <button class="shortcut-card" onclick={() => activeTab = "commands"}><span class="shortcut-icon">⌁</span><span><strong>Transform text</strong><small>Type a trigger at the end of your text</small></span><kbd>!</kbd></button>
+            <button class="shortcut-card reply-shortcut" onclick={() => activeTab = "write"}><span class="shortcut-icon"><PenLine size={13} strokeWidth={2} /></span><span><strong>Reply to selection</strong><small>Select a message, then draft in place</small></span><kbd>{config.composer_shortcut}</kbd></button>
+            <button class="shortcut-card" onclick={() => activeTab = "dictate"}><span class="shortcut-icon"><Mic size={13} strokeWidth={2} /></span><span><strong>Start dictation</strong><small>{config.dictation_mode.replaceAll("-", " ")}</small></span><kbd>{config.dictation_shortcut}</kbd></button>
+            <button class="shortcut-card" onclick={() => activeTab = "commands"}><span class="shortcut-icon"><Sparkles size={13} strokeWidth={2} /></span><span><strong>Transform text</strong><small>Type a trigger at the end of your text</small></span><kbd>!</kbd></button>
           </div>
         </section>
-        <div class="home-note"><span aria-hidden="true">⌁</span><p><strong>Private by design.</strong> Reply context is selected by you, never read from the screen, and never kept as conversation history.</p></div>
+        <div class="home-note"><span class="home-note-icon" aria-hidden="true"><ShieldCheck size={14} strokeWidth={2} /></span><p><strong>Private by design.</strong> Reply context is selected by you, never read from the screen, and never kept as conversation history.</p></div>
       </div>
     {:else if activeTab === "write"}
       <div class="panel-section animate-fade-in">
         <ShortcutInput label="Reply composer shortcut" value={config.composer_shortcut} conflicts={shortcutConflicts("composer_shortcut")} onChange={(value) => changeShortcut("composer_shortcut", value)} />
         <div class="section-header">
-          <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
-          </svg>
+          <Key class="section-icon" size={16} strokeWidth={2} />
           <h2 class="section-title">API Configuration</h2>
         </div>
         <p class="section-desc">
@@ -552,10 +529,7 @@
     {:else if activeTab === "commands"}
       <div class="panel-section animate-fade-in">
         <div class="section-header">
-          <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="4 17 10 11 4 5"/>
-            <line x1="12" y1="19" x2="20" y2="19"/>
-          </svg>
+          <Terminal class="section-icon" size={16} strokeWidth={2} />
           <h2 class="section-title">Commands</h2>
         </div>
         <p class="section-desc">
@@ -628,17 +602,7 @@
     {:else if activeTab === "behavior"}
       <div class="panel-section animate-fade-in">
         <div class="section-header">
-          <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="4" y1="21" x2="4" y2="14"/>
-            <line x1="4" y1="10" x2="4" y2="3"/>
-            <line x1="12" y1="21" x2="12" y2="12"/>
-            <line x1="12" y1="8" x2="12" y2="3"/>
-            <line x1="20" y1="21" x2="20" y2="16"/>
-            <line x1="20" y1="12" x2="20" y2="3"/>
-            <line x1="1" y1="14" x2="7" y2="14"/>
-            <line x1="9" y1="8" x2="15" y2="8"/>
-            <line x1="17" y1="16" x2="23" y2="16"/>
-          </svg>
+          <SlidersHorizontal class="section-icon" size={16} strokeWidth={2} />
           <h2 class="section-title">Behavior</h2>
         </div>
 
@@ -890,7 +854,7 @@
   .setup-steps { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }.setup-steps button { display:flex; align-items:flex-start; gap:8px; padding:9px; border:1px solid rgba(255,255,255,.09); border-radius:11px; color:inherit; background:rgba(7,9,14,.16); cursor:pointer; font:inherit; text-align:left; transition:background 140ms ease,border-color 140ms ease,transform 140ms ease; }.setup-steps button:hover { border-color:rgba(170,202,255,.32); background:rgba(255,255,255,.07); transform:translateY(-1px); }.setup-steps b { display:grid; place-items:center; width:18px; height:18px; flex:0 0 auto; border-radius:50%; color:#13213a; background:#b8d2ff; font-size:10px; }.setup-steps span { display:grid; gap:2px; min-width:0; }.setup-steps strong { font-size:.72rem; }.setup-steps small { color:var(--text-secondary); font-size:.66rem; line-height:1.35; }
   .shortcut-section { display:grid; gap:10px; }.shortcut-section .section-header { justify-content:space-between; margin:0; }.shortcut-section .section-header > span { color:var(--text-muted); font-size:.7rem; }
   .shortcut-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }.shortcut-card { display:grid; grid-template-columns:auto 1fr; gap:9px; min-width:0; padding:12px; border:1px solid var(--border); border-radius:14px; color:inherit; background:rgba(255,255,255,.045); cursor:pointer; font:inherit; text-align:left; transition:background 140ms ease,border-color 140ms ease,transform 140ms ease,box-shadow 140ms ease; }.shortcut-card:hover { border-color:rgba(167,199,255,.34); background:rgba(255,255,255,.085); box-shadow:0 8px 18px rgba(0,0,0,.1); transform:translateY(-1px); }.shortcut-card > span:nth-child(2) { display:grid; gap:3px; min-width:0; }.shortcut-card strong { color:var(--text-primary); font-size:.76rem; }.shortcut-card small { overflow:hidden; color:var(--text-secondary); font-size:.67rem; line-height:1.35; text-overflow:ellipsis; }.shortcut-icon { display:grid; place-items:center; width:25px; height:25px; border:1px solid rgba(170,202,255,.2); border-radius:8px; color:#c9dcff; background:rgba(122,163,237,.15); font-size:13px; }.shortcut-card kbd { grid-column:1/-1; width:max-content; padding:3px 5px; border:1px solid rgba(255,255,255,.12); border-radius:5px; color:var(--text-muted); background:rgba(0,0,0,.12); font-family:var(--font-body); font-size:.64rem; font-weight:700; }.reply-shortcut { border-color:rgba(163,197,255,.24); background:linear-gradient(145deg,rgba(117,158,239,.15),rgba(255,255,255,.035)); }
-  .home-note { display:flex; align-items:flex-start; gap:9px; padding:11px 12px; border-radius:12px; color:var(--text-secondary); background:rgba(255,255,255,.035); font-size:.72rem; line-height:1.45; }.home-note > span { color:var(--accent); font-size:15px; line-height:1; }.home-note p { margin:0; }.home-note strong { color:var(--text-primary); }
+  .home-note { display:flex; align-items:flex-start; gap:9px; padding:11px 12px; border-radius:12px; color:var(--text-secondary); background:rgba(255,255,255,.035); font-size:.72rem; line-height:1.45; }.home-note > span { color:var(--accent); font-size:15px; line-height:1; }.home-note-icon { display:grid; place-items:center; flex:0 0 auto; }.home-note p { margin:0; }.home-note strong { color:var(--text-primary); }
   @media (max-width:640px) { .setup-steps,.shortcut-grid { grid-template-columns:1fr; }.shortcut-card { grid-template-columns:auto 1fr auto; align-items:center; }.shortcut-card kbd { grid-column:auto; }.shortcut-card small { white-space:normal; } }
 
   .provider-controls {

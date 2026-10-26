@@ -4,6 +4,7 @@
   import { listen } from "@tauri-apps/api/event";
   import { onMount, tick } from "svelte";
   import { translate } from "./i18n.js";
+  import { Sparkles, X, CircleAlert } from "@lucide/svelte";
 
   const tones = ["Casual", "Professional", "Warm", "Concise", "Assertive", "Custom"];
   let context = $state("");
@@ -179,10 +180,10 @@
   <section class="quick-reply">
     <header data-tauri-drag-region>
       <div class="title" data-tauri-drag-region>
-        <span class="mark" aria-hidden="true">✦</span>
+        <span class="mark" aria-hidden="true"><Sparkles size={11} strokeWidth={2.2} /></span>
         <span id="composer-title">Reply</span>
       </div>
-      <button class="close" aria-label={t("composer.close")} onclick={close} disabled={inserting}>×</button>
+      <button class="close" aria-label={t("composer.close")} onclick={close} disabled={inserting}><X size={15} strokeWidth={2} /></button>
     </header>
 
     {#if context && !contextExpanded}
@@ -211,7 +212,7 @@
       </div>
     </div>
 
-    {#if error}<p class="error" role="alert"><span aria-hidden="true">!</span>{error}</p>{/if}
+    {#if error}<p class="error" role="alert"><span aria-hidden="true"><CircleAlert size={13} strokeWidth={2.2} /></span>{error}</p>{/if}
 
     {#if draft}
       <section class="draft-card">

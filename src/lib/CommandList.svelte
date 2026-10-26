@@ -1,5 +1,7 @@
 <script>
   import { invoke } from "@tauri-apps/api/core";
+  import { Plus, Pencil, Trash2 } from "@lucide/svelte";
+  import { autoAnimate } from "@formkit/auto-animate";
 
   const BUILTIN_COMMANDS = [
     { trigger: "!fix", description: "Fix grammar, spelling, and punctuation" },
@@ -171,10 +173,7 @@
       <h3 class="subsection-title">Custom Commands</h3>
       {#if !showAddForm}
         <button class="btn btn-secondary btn-sm" onclick={startAdd}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
+          <Plus size={14} strokeWidth={2.2} />
           Add Command
         </button>
       {/if}
@@ -192,48 +191,44 @@
       </div>
     {/if}
 
-    {#each customCommands as cmd, i}
-      <div class="custom-command" class:editing={editingIndex === i}>
-        {#if editingIndex === i}
-          <div class="edit-form animate-fade-in">
-            <div class="edit-row">
-              <label class="edit-label" for="edit-trigger-{i}">Trigger</label>
-              <div class="trigger-input-row">
-                <span class="trigger-prefix mono">!</span>
-                <input id="edit-trigger-{i}" type="text" bind:value={editTrigger} placeholder="command name" class="mono" />
+    <div class="custom-list" use:autoAnimate={{ duration: 170, easing: "ease-out" }}>
+      {#each customCommands as cmd, i}
+        <div class="custom-command" class:editing={editingIndex === i}>
+          {#if editingIndex === i}
+            <div class="edit-form animate-fade-in">
+              <div class="edit-row">
+                <label class="edit-label" for="edit-trigger-{i}">Trigger</label>
+                <div class="trigger-input-row">
+                  <span class="trigger-prefix mono">!</span>
+                  <input id="edit-trigger-{i}" type="text" bind:value={editTrigger} placeholder="command name" class="mono" />
+                </div>
+              </div>
+              <div class="edit-row">
+                <label class="edit-label" for="edit-prompt-{i}">System prompt</label>
+                <textarea id="edit-prompt-{i}" bind:value={editPrompt} rows="4" placeholder="Tell Flick what this command should do"></textarea>
+              </div>
+              <div class="edit-actions">
+                <button class="btn btn-primary btn-sm" onclick={() => saveEdit(i)}>Save</button>
+                <button class="btn btn-ghost btn-sm" onclick={cancelEdit}>Cancel</button>
               </div>
             </div>
-            <div class="edit-row">
-              <label class="edit-label" for="edit-prompt-{i}">System prompt</label>
-              <textarea id="edit-prompt-{i}" bind:value={editPrompt} rows="4" placeholder="Tell Flick what this command should do"></textarea>
+          {:else}
+            <div class="command-row custom-row">
+              <span class="command-trigger mono badge badge-accent">!{cmd.trigger}</span>
+              <span class="command-desc prompt-preview">{cmd.prompt}</span>
+              <div class="command-actions">
+                <button class="btn btn-ghost btn-sm" onclick={() => startEdit(i)} title="Edit">
+                  <Pencil size={13} strokeWidth={2} />
+                </button>
+                <button class="btn btn-ghost btn-sm text-error" onclick={() => deleteCommand(i)} title="Delete">
+                  <Trash2 size={13} strokeWidth={2} />
+                </button>
+              </div>
             </div>
-            <div class="edit-actions">
-              <button class="btn btn-primary btn-sm" onclick={() => saveEdit(i)}>Save</button>
-              <button class="btn btn-ghost btn-sm" onclick={cancelEdit}>Cancel</button>
-            </div>
-          </div>
-        {:else}
-          <div class="command-row custom-row">
-            <span class="command-trigger mono badge badge-accent">!{cmd.trigger}</span>
-            <span class="command-desc prompt-preview">{cmd.prompt}</span>
-            <div class="command-actions">
-              <button class="btn btn-ghost btn-sm" onclick={() => startEdit(i)} title="Edit">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                </svg>
-              </button>
-              <button class="btn btn-ghost btn-sm text-error" onclick={() => deleteCommand(i)} title="Delete">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="3 6 5 6 21 6"/>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-        {/if}
-      </div>
-    {/each}
+          {/if}
+        </div>
+      {/each}
+    </div>
 
     {#if showAddForm}
       <div class="edit-form new-form animate-slide-up">
@@ -320,6 +315,12 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 200px;
+  }
+
+  .custom-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
   }
 
   .command-actions {

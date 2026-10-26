@@ -1,6 +1,7 @@
 <script>
   import { invoke } from "@tauri-apps/api/core";
   import { openUrl } from "@tauri-apps/plugin-opener";
+  import { Eye, EyeOff, CircleCheck, CircleAlert, ExternalLink } from "@lucide/svelte";
 
   let {
     provider = "gemini",
@@ -161,15 +162,9 @@
       {/if}
       <button class="btn btn-ghost btn-sm eye-btn" onclick={toggleMask} title={masked ? "Show key" : "Hide key"}>
         {#if masked}
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-            <circle cx="12" cy="12" r="3"/>
-          </svg>
+          <Eye size={16} strokeWidth={2} />
         {:else}
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-            <line x1="1" y1="1" x2="23" y2="23"/>
-          </svg>
+          <EyeOff size={16} strokeWidth={2} />
         {/if}
       </button>
     </div>
@@ -199,24 +194,16 @@
   {#if testResult}
     <div class="test-result" class:success={testResult === 'success'} class:error={testResult === 'error'}>
       {#if testResult === 'success'}
-        <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-        </svg>
+        <CircleCheck size={14} strokeWidth={2.2} />
       {:else}
-        <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-        </svg>
+        <CircleAlert size={14} strokeWidth={2.2} />
       {/if}
       <span>{testMessage}</span>
     </div>
   {/if}
 
   {#if provider !== "custom"}<a class="api-link" href={keyLink()} onclick={openKeyLink}>
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-      <polyline points="15 3 21 3 21 9"/>
-      <line x1="10" y1="14" x2="21" y2="3"/>
-    </svg>
+    <ExternalLink size={12} strokeWidth={2} />
     Get a {providerName()} API key
   </a>{/if}
 </div>
