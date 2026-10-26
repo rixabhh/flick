@@ -24,6 +24,8 @@ jobs:
       sha: ${{ steps.metadata.outputs.sha }}
       tag: ${{ steps.metadata.outputs.tag }}
       create_draft: ${{ steps.metadata.outputs.create_draft }}
+      macos_signing: ${{ steps.signing.outputs.macos }}
+      windows_signing: ${{ steps.signing.outputs.windows }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -37,6 +39,17 @@ jobs:
           RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           CREATE_RELEASE: ${{ github.ref_type == 'tag' || inputs.create_draft == true }}
         run: node scripts/validate-release.mjs --check
+      # Signing is optional by credentials: public releases are signed when the
+      # publisher's certificates are configured, and ship unsigned (with the
+      # platform warnings that implies) when they are absent.
+      - id: signing
+        name: Detect signing credentials
+        env:
+          MACOS: ${{ secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' && secrets.APPLE_SIGNING_IDENTITY != '' && secrets.APPLE_ID != '' && secrets.APPLE_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
+          WINDOWS: ${{ secrets.WINDOWS_CERTIFICATE != '' && secrets.WINDOWS_CERTIFICATE_PASSWORD != '' && secrets.WINDOWS_TIMESTAMP_URL != '' }}
+        run: |
+          echo "macos=${MACOS}" >> "$GITHUB_OUTPUT"
+          echo "windows=${WINDOWS}" >> "$GITHUB_OUTPUT"
 
   browser-smoke:
     needs: validate
@@ -158,10 +171,11 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      # Draft/public releases must use the publisher's real Authenticode
-      # certificate. Build-only runs may remain unsigned test candidates.
+      # Signed when the publisher's credentials exist; unsigned otherwise.
+      # Build-release.mjs refuses to sign with a half-present certificate
+      # set, so a misconfigured secret still fails loudly.
       - name: Import Windows code-signing certificate
-        if: endsWith(matrix.target, 'pc-windows-msvc') && needs.validate.outputs.create_draft == 'true'
+        if: endsWith(matrix.target, 'pc-windows-msvc') && needs.validate.outputs.create_draft == 'true' && needs.validate.outputs.windows_signing == 'true'
         shell: pwsh
         env:
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
@@ -187,7 +201,7 @@ jobs:
           'FLICK_WINDOWS_DIGEST_ALGORITHM=sha256' | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Import macOS Developer ID identity
-        if: endsWith(matrix.target, 'apple-darwin') && needs.validate.outputs.create_draft == 'true'
+        if: endsWith(matrix.target, 'apple-darwin') && needs.validate.outputs.create_draft == 'true' && needs.validate.outputs.macos_signing == 'true'
         shell: bash
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -224,8 +238,8 @@ jobs:
       - name: Build installers
         env:
           FLICK_BUILD_TARGET: ${{ matrix.target }}
-          REQUIRE_MACOS_SIGNING: ${{ endsWith(matrix.target, 'apple-darwin') && needs.validate.outputs.create_draft == 'true' && 'true' || 'false' }}
-          REQUIRE_WINDOWS_SIGNING: ${{ endsWith(matrix.target, 'pc-windows-msvc') && needs.validate.outputs.create_draft == 'true' && 'true' || 'false' }}
+          REQUIRE_MACOS_SIGNING: ${{ endsWith(matrix.target, 'apple-darwin') && needs.validate.outputs.create_draft == 'true' && needs.validate.outputs.macos_signing == 'true' && 'true' || 'false' }}
+          REQUIRE_WINDOWS_SIGNING: ${{ endsWith(matrix.target, 'pc-windows-msvc') && needs.validate.outputs.create_draft == 'true' && needs.validate.outputs.windows_signing == 'true' && 'true' || 'false' }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -235,7 +249,7 @@ jobs:
         run: node scripts/build-release.mjs
 
       - name: Verify Windows installer signatures
-        if: endsWith(matrix.target, 'pc-windows-msvc') && needs.validate.outputs.create_draft == 'true'
+        if: endsWith(matrix.target, 'pc-windows-msvc') && needs.validate.outputs.create_draft == 'true' && needs.validate.outputs.windows_signing == 'true'
         shell: pwsh
         run: |
           $signTool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter signtool.exe -ErrorAction Stop |
@@ -251,7 +265,7 @@ jobs:
       # on a clean Mac. Verify the signed app and its stapled notarization
       # ticket before the installer is allowed into the release artifacts.
       - name: Verify macOS signing and notarization
-        if: endsWith(matrix.target, 'apple-darwin') && needs.validate.outputs.create_draft == 'true'
+        if: endsWith(matrix.target, 'apple-darwin') && needs.validate.outputs.create_draft == 'true' && needs.validate.outputs.macos_signing == 'true'
         shell: bash
         run: |
           set -euo pipefail
